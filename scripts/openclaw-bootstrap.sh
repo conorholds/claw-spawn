@@ -15,6 +15,17 @@ BOT_ID="${BOT_ID}"
 CONTROL_PLANE_URL="${CONTROL_PLANE_URL:-https://api.cedros.io}"
 BOT_CONFIG='${BOT_CONFIG}'
 
+# Workspace/customization (janebot-cli)
+CUSTOMIZER_REPO_URL="${CUSTOMIZER_REPO_URL:-https://github.com/janebot2026/janebot-cli.git}"
+CUSTOMIZER_REF="${CUSTOMIZER_REF:-4b170b4aa31f79bda84f7383b3992ca8681d06d3}"
+CUSTOMIZER_WORKSPACE_DIR="${CUSTOMIZER_WORKSPACE_DIR:-/opt/openclaw/workspace}"
+CUSTOMIZER_AGENT_NAME="${CUSTOMIZER_AGENT_NAME:-Jane}"
+CUSTOMIZER_OWNER_NAME="${CUSTOMIZER_OWNER_NAME:-Cedros}"
+CUSTOMIZER_SKIP_QMD="${CUSTOMIZER_SKIP_QMD:-true}"
+CUSTOMIZER_SKIP_CRON="${CUSTOMIZER_SKIP_CRON:-true}"
+CUSTOMIZER_SKIP_GIT="${CUSTOMIZER_SKIP_GIT:-true}"
+CUSTOMIZER_SKIP_HEARTBEAT="${CUSTOMIZER_SKIP_HEARTBEAT:-true}"
+
 echo "=== OpenClaw Bot Setup Starting ==="
 echo "Bot ID: $BOT_ID"
 echo "Control Plane: $CONTROL_PLANE_URL"
@@ -37,6 +48,21 @@ apt-get install -y \
     software-properties-common \
     apt-transport-https \
     jq
+
+# Install Node.js 18+ (janebot-cli requires node >=18)
+echo "=== Installing Node.js (for janebot-cli) ==="
+if command -v node >/dev/null 2>&1; then
+    NODE_MAJOR=$(node -v 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/')
+else
+    NODE_MAJOR=0
+fi
+
+if [ "${NODE_MAJOR:-0}" -lt 18 ]; then
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    apt-get install -y nodejs
+else
+    echo "Node already present: $(node -v)"
+fi
 
 # Install Docker
 echo "=== Installing Docker ==="
@@ -62,11 +88,75 @@ usermod -aG docker openclaw
 mkdir -p /opt/openclaw
 cd /opt/openclaw
 
+# Bootstrap customized workspace layout (best-effort)
+echo "=== Bootstrapping Clawdbot Workspace (janebot-cli) ==="
+CUSTOMIZER_STATUS=0
+set +e
+
+JANE_DIR="/opt/openclaw/tools/janebot-cli"
+mkdir -p "$(dirname "$JANE_DIR")" "$CUSTOMIZER_WORKSPACE_DIR"
+chown -R openclaw:openclaw "$CUSTOMIZER_WORKSPACE_DIR"
+
+if [ ! -d "$JANE_DIR/.git" ]; then
+    git clone --no-checkout "$CUSTOMIZER_REPO_URL" "$JANE_DIR"
+fi
+
+(
+    cd "$JANE_DIR" || exit 1
+
+    # Fetch the pinned ref (tag/branch/SHA) and check it out.
+    git fetch --depth 1 origin "$CUSTOMIZER_REF" \
+        || git fetch --depth 1 origin "refs/tags/$CUSTOMIZER_REF" \
+        || git fetch origin "$CUSTOMIZER_REF"
+
+    git checkout -f FETCH_HEAD || git checkout -f "$CUSTOMIZER_REF"
+
+    npm ci
+) || CUSTOMIZER_STATUS=$?
+
+CUSTOMIZER_ARGS=(
+    init
+    -d "$CUSTOMIZER_WORKSPACE_DIR"
+    --yes
+    --force
+    --agent-name "$CUSTOMIZER_AGENT_NAME"
+    --owner-name "$CUSTOMIZER_OWNER_NAME"
+)
+
+if [ "$CUSTOMIZER_SKIP_QMD" = "true" ]; then
+    CUSTOMIZER_ARGS+=(--skip-qmd)
+fi
+if [ "$CUSTOMIZER_SKIP_CRON" = "true" ]; then
+    CUSTOMIZER_ARGS+=(--skip-cron)
+fi
+if [ "$CUSTOMIZER_SKIP_GIT" = "true" ]; then
+    CUSTOMIZER_ARGS+=(--skip-git)
+fi
+if [ "$CUSTOMIZER_SKIP_HEARTBEAT" = "true" ]; then
+    CUSTOMIZER_ARGS+=(--skip-heartbeat)
+fi
+
+if [ $CUSTOMIZER_STATUS -eq 0 ]; then
+    sudo -u openclaw -H node "$JANE_DIR/bin/janebot-cli.js" "${CUSTOMIZER_ARGS[@]}"
+    CUSTOMIZER_STATUS=$?
+fi
+
+set -e
+
+if [ $CUSTOMIZER_STATUS -ne 0 ]; then
+    echo "WARN: janebot-cli customization failed (status=$CUSTOMIZER_STATUS) at $(date); continuing bootstrap"
+fi
+
 # Create the bot configuration file
 echo "=== Creating Bot Configuration ==="
-cat > config.json << EOFCFG
+if [ -n "$BOT_CONFIG" ] && [ "$BOT_CONFIG" != "\${BOT_CONFIG}" ]; then
+    cat > config.json << EOFCFG
 $BOT_CONFIG
 EOFCFG
+else
+    # No inline config provided; service will fetch desired config from control plane.
+    echo '{}' > config.json
+fi
 
 # Register with control plane
 echo "=== Registering with Control Plane ==="
