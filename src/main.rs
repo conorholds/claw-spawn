@@ -42,6 +42,7 @@ type BotLifecycleServiceType = BotLifecycleService<
 
 #[derive(Clone)]
 struct AppState {
+    pool: PgPool,
     account_repo: Arc<PostgresAccountRepository>,
     provisioning: Arc<ProvisioningServiceType>,
     lifecycle: Arc<BotLifecycleServiceType>,
@@ -89,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let state = AppState {
+        pool: pool.clone(),
         account_repo,
         provisioning,
         lifecycle,
@@ -115,8 +117,21 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn health_check() -> impl IntoResponse {
-    StatusCode::OK
+async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
+    // CLEAN-005: Query DB to verify connectivity
+    match sqlx::query("SELECT 1").fetch_one(&state.pool).await {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "healthy"}))),
+        Err(e) => {
+            error!("Health check failed: DB connectivity issue: {}", e);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "status": "unhealthy",
+                    "error": "Database connectivity failed"
+                })),
+            )
+        }
+    }
 }
 
 #[derive(Deserialize)]
