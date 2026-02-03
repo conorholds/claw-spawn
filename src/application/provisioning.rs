@@ -8,8 +8,35 @@ use crate::infrastructure::{
 use rand::RngCore;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, Span};
 use uuid::Uuid;
+
+/// MED-005: Maximum length for sanitized bot names
+const MAX_BOT_NAME_LENGTH: usize = 64;
+
+/// MED-005: Sanitize user-provided bot name to prevent injection/truncation issues
+/// - Removes/replaces special characters
+/// - Limits length to prevent truncation issues
+fn sanitize_bot_name(name: &str) -> String {
+    // Replace problematic characters with safe alternatives
+    let sanitized: String = name
+        .chars()
+        .map(|c| match c {
+            // Allow alphanumeric, spaces, hyphens, underscores
+            'a'..='z' | 'A'..='Z' | '0'..='9' | ' ' | '-' | '_' => c,
+            // Replace other special characters with underscore
+            _ => '_',
+        })
+        .collect();
+
+    // Trim leading/trailing whitespace and limit length
+    let trimmed = sanitized.trim();
+    if trimmed.len() > MAX_BOT_NAME_LENGTH {
+        trimmed[..MAX_BOT_NAME_LENGTH].to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum ProvisioningError {
