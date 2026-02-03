@@ -118,12 +118,14 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Removed tracked `.claude/`, `.gemini/`, `.opencode/`, `.mcp.json`; added ignore rules; verified via `cargo test`
 
-- [ ] F-012 Commit `Cargo.lock` for reproducible builds
+- [x] F-012 Commit `Cargo.lock` for reproducible builds
   - Files: `.gitignore`, `Cargo.lock`
   - Planned fix:
     - Remove `Cargo.lock` from `.gitignore` and commit it
   - Test plan:
     - `cargo build`
+  - Completed:
+    - Un-ignored and committed `Cargo.lock`; verified via `cargo build`
 
 - [ ] F-013 Harden bootstrap config fetch: require 200 + valid JSON before overwriting
   - Files: `scripts/openclaw-bootstrap.sh`
