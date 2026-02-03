@@ -172,15 +172,17 @@
 - **Status:** Complete
 - **Completion Note:** Build successful. Eliminates dead_code warning. No functional changes.
 
-### [ ] MED-002: Unsafe String Splitting
-- **File:** `src/application/provisioning.rs:136`
+### [x] MED-002: Unsafe String Splitting
+- **File:** `src/application/provisioning.rs:133`
 - **Issue:** UUID split on '-' could panic if format changes
 - **Fix:**
-  - Use safe truncation: `&id_str[..8.min(id_str.len())]`
+  - Changed to safe truncation: `&id_str[..8.min(id_str.len())]`
+  - Stores UUID in variable first to avoid multiple to_string() calls
 - **Test Plan:**
   - Create bot with various UUID formats
   - Verify no panic
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. Safe truncation prevents panic if UUID format changes.
 
 ### [ ] MED-003: Bootstrap Script Runs as Root
 - **File:** `scripts/openclaw-bootstrap.sh:186`

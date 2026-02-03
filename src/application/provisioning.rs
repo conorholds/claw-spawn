@@ -130,7 +130,9 @@ where
             .await?;
         bot.status = BotStatus::Provisioning;
 
-        let droplet_name = format!("openclaw-bot-{}", bot.id.to_string().split('-').next().unwrap());
+        // MED-002: Safe string truncation instead of split
+        let id_str = bot.id.to_string();
+        let droplet_name = format!("openclaw-bot-{}", &id_str[..8.min(id_str.len())]);
         let registration_token = self.generate_registration_token(bot.id);
 
         let user_data = self.generate_user_data(&registration_token, bot.id, config);
