@@ -115,6 +115,17 @@ where
     encryption: Arc<SecretsEncryption>,
     openclaw_image: String,
     control_plane_url: String,
+
+    // janebot-cli customization
+    customizer_repo_url: String,
+    customizer_ref: String,
+    customizer_workspace_dir: String,
+    customizer_agent_name: String,
+    customizer_owner_name: String,
+    customizer_skip_qmd: bool,
+    customizer_skip_cron: bool,
+    customizer_skip_git: bool,
+    customizer_skip_heartbeat: bool,
 }
 
 #[cfg(test)]
@@ -316,6 +327,15 @@ mod tests {
             encryption,
             "ubuntu-22-04-x64".to_string(),
             "https://example.invalid".to_string(),
+            "https://github.com/janebot2026/janebot-cli.git".to_string(),
+            "4b170b4aa31f79bda84f7383b3992ca8681d06d3".to_string(),
+            "/opt/openclaw/workspace".to_string(),
+            "Jane".to_string(),
+            "Cedros".to_string(),
+            true,
+            true,
+            true,
+            true,
         );
 
         let bot_id = Uuid::new_v4();
@@ -369,6 +389,16 @@ where
         encryption: Arc<SecretsEncryption>,
         openclaw_image: String,
         control_plane_url: String,
+
+        customizer_repo_url: String,
+        customizer_ref: String,
+        customizer_workspace_dir: String,
+        customizer_agent_name: String,
+        customizer_owner_name: String,
+        customizer_skip_qmd: bool,
+        customizer_skip_cron: bool,
+        customizer_skip_git: bool,
+        customizer_skip_heartbeat: bool,
     ) -> Self {
         Self {
             do_client,
@@ -379,6 +409,16 @@ where
             encryption,
             openclaw_image,
             control_plane_url,
+
+            customizer_repo_url,
+            customizer_ref,
+            customizer_workspace_dir,
+            customizer_agent_name,
+            customizer_owner_name,
+            customizer_skip_qmd,
+            customizer_skip_cron,
+            customizer_skip_git,
+            customizer_skip_heartbeat,
         }
     }
 
@@ -635,10 +675,34 @@ export REGISTRATION_TOKEN="{}"
 export BOT_ID="{}"
 export CONTROL_PLANE_URL="{}"
 
+# Workspace/customization (janebot-cli)
+export CUSTOMIZER_REPO_URL="{}"
+export CUSTOMIZER_REF="{}"
+export CUSTOMIZER_WORKSPACE_DIR="{}"
+export CUSTOMIZER_AGENT_NAME="{}"
+export CUSTOMIZER_OWNER_NAME="{}"
+export CUSTOMIZER_SKIP_QMD="{}"
+export CUSTOMIZER_SKIP_CRON="{}"
+export CUSTOMIZER_SKIP_GIT="{}"
+export CUSTOMIZER_SKIP_HEARTBEAT="{}"
+
 # Start of embedded bootstrap script
 {}
 "##,
-            bot_id, registration_token, bot_id, self.control_plane_url, bootstrap_script
+            bot_id,
+            registration_token,
+            bot_id,
+            self.control_plane_url,
+            bootstrap_script,
+            self.customizer_repo_url,
+            self.customizer_ref,
+            self.customizer_workspace_dir,
+            self.customizer_agent_name,
+            self.customizer_owner_name,
+            self.customizer_skip_qmd,
+            self.customizer_skip_cron,
+            self.customizer_skip_git,
+            self.customizer_skip_heartbeat
         )
     }
 

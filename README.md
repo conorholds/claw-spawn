@@ -100,6 +100,16 @@ The Docker setup includes:
 | `CEDROS_SERVER_HOST` | No | `0.0.0.0` | Server bind address |
 | `CEDROS_SERVER_PORT` | No | `8080` | Server port |
 | `CEDROS_OPENCLAW_IMAGE` | No | `ubuntu-22-04-x64` | DO droplet image |
+| `CEDROS_CONTROL_PLANE_URL` | No | `https://api.cedros.io` | Bot control-plane base URL |
+| `CEDROS_CUSTOMIZER_REPO_URL` | No | `https://github.com/janebot2026/janebot-cli.git` | Public git repo for workspace customizer |
+| `CEDROS_CUSTOMIZER_REF` | No | pinned SHA | Git ref (tag/branch/SHA) to checkout for reproducible bootstrap |
+| `CEDROS_CUSTOMIZER_WORKSPACE_DIR` | No | `/opt/openclaw/workspace` | Workspace directory on droplet |
+| `CEDROS_CUSTOMIZER_AGENT_NAME` | No | `Jane` | Agent name passed to customizer |
+| `CEDROS_CUSTOMIZER_OWNER_NAME` | No | `Cedros` | Owner name passed to customizer |
+| `CEDROS_CUSTOMIZER_SKIP_QMD` | No | `true` | Skip QMD install at droplet bootstrap |
+| `CEDROS_CUSTOMIZER_SKIP_CRON` | No | `true` | Skip OpenClaw cron install at droplet bootstrap |
+| `CEDROS_CUSTOMIZER_SKIP_GIT` | No | `true` | Skip git init at droplet bootstrap |
+| `CEDROS_CUSTOMIZER_SKIP_HEARTBEAT` | No | `true` | Skip heartbeat install at droplet bootstrap |
 
 ## 🧩 Embedded Usage (Integrate Into Larger Axum Server)
 

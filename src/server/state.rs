@@ -61,6 +61,15 @@ pub async fn build_state_with_pool(
         encryption,
         config.openclaw_image,
         config.control_plane_url,
+        config.customizer_repo_url,
+        config.customizer_ref,
+        config.customizer_workspace_dir,
+        config.customizer_agent_name,
+        config.customizer_owner_name,
+        config.customizer_skip_qmd,
+        config.customizer_skip_cron,
+        config.customizer_skip_git,
+        config.customizer_skip_heartbeat,
     ));
 
     let lifecycle = Arc::new(BotLifecycleService::new(
