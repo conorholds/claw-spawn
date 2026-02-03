@@ -7,13 +7,10 @@ use chrono::{DateTime, Utc};
 use claw_spawn::{
     application::BotLifecycleService,
     domain::{
-        Account, AlgorithmMode, AssetFocus, Bot, BotStatus, Droplet, DropletStatus,
-        EncryptedBotSecrets, Persona, RiskConfig, StoredBotConfig, StrictnessLevel,
-        SubscriptionTier, TradingConfig,
+        Account, AlgorithmMode, AssetFocus, Bot, BotStatus, EncryptedBotSecrets, Persona,
+        RiskConfig, StoredBotConfig, StrictnessLevel, SubscriptionTier, TradingConfig,
     },
-    infrastructure::{
-        AccountRepository, BotRepository, ConfigRepository, DropletRepository, RepositoryError,
-    },
+    infrastructure::{AccountRepository, BotRepository, ConfigRepository, RepositoryError},
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -345,78 +342,6 @@ impl ConfigRepository for MockConfigRepository {
         let next = counter.get(&bot_id).cloned().unwrap_or(0) + 1;
         counter.insert(bot_id, next);
         Ok(next)
-    }
-}
-
-/// In-memory mock implementation of DropletRepository
-#[derive(Clone, Default)]
-struct MockDropletRepository {
-    droplets: Arc<Mutex<HashMap<i64, Droplet>>>,
-}
-
-#[async_trait]
-impl DropletRepository for MockDropletRepository {
-    async fn create(&self, droplet: &Droplet) -> Result<(), RepositoryError> {
-        let mut droplets = self.droplets.lock().unwrap();
-        droplets.insert(droplet.id, droplet.clone());
-        Ok(())
-    }
-
-    async fn get_by_id(&self, id: i64) -> Result<Droplet, RepositoryError> {
-        let droplets = self.droplets.lock().unwrap();
-        droplets
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", id)))
-    }
-
-    async fn update_bot_assignment(
-        &self,
-        droplet_id: i64,
-        bot_id: Option<Uuid>,
-    ) -> Result<(), RepositoryError> {
-        let mut droplets = self.droplets.lock().unwrap();
-        let droplet = droplets
-            .get_mut(&droplet_id)
-            .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", droplet_id)))?;
-
-        droplet.bot_id = bot_id;
-        Ok(())
-    }
-
-    async fn update_status(&self, droplet_id: i64, status: &str) -> Result<(), RepositoryError> {
-        let mut droplets = self.droplets.lock().unwrap();
-        let droplet = droplets
-            .get_mut(&droplet_id)
-            .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", droplet_id)))?;
-
-        droplet.status = match status {
-            "active" => DropletStatus::Active,
-            "off" => DropletStatus::Off,
-            "new" => DropletStatus::New,
-            _ => DropletStatus::Error,
-        };
-        Ok(())
-    }
-
-    async fn update_ip(&self, droplet_id: i64, ip: Option<String>) -> Result<(), RepositoryError> {
-        let mut droplets = self.droplets.lock().unwrap();
-        let droplet = droplets
-            .get_mut(&droplet_id)
-            .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", droplet_id)))?;
-
-        droplet.ip_address = ip;
-        Ok(())
-    }
-
-    async fn mark_destroyed(&self, droplet_id: i64) -> Result<(), RepositoryError> {
-        let mut droplets = self.droplets.lock().unwrap();
-        let droplet = droplets
-            .get_mut(&droplet_id)
-            .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", droplet_id)))?;
-
-        droplet.status = DropletStatus::Destroyed;
-        Ok(())
     }
 }
 
