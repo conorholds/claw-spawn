@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use cedros_open_spawn::domain::{Droplet, DropletStatus};
-use cedros_open_spawn::infrastructure::{DropletRepository, RepositoryError};
+use claw_spawn::domain::{Droplet, DropletStatus};
+use claw_spawn::infrastructure::{DropletRepository, RepositoryError};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 

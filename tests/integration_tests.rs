@@ -1,8 +1,8 @@
-//! Integration tests for cedros-open-spawn
+//! Integration tests for claw-spawn
 //! CLEAN-003: Comprehensive test suite covering account creation, bot lifecycle,
 //! config versioning, and authentication.
 
-use cedros_open_spawn::{
+use claw_spawn::{
     application::BotLifecycleService,
     domain::{
         Account, AlgorithmMode, AssetFocus, Bot, BotStatus, Droplet,

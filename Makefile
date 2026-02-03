@@ -1,4 +1,4 @@
-# Cedros OpenSpawn - Makefile for local development
+# Claw Spawn - Makefile for local development
 # Usage: make (builds and starts everything)
 #        make help (shows all available commands)
 
@@ -9,7 +9,7 @@ all: check-deps setup-env db migrate build run
 
 # Show all available commands
 help:
-	@echo "Cedros OpenSpawn - Available Commands"
+	@echo "Claw Spawn - Available Commands"
 	@echo "========================================"
 	@echo ""
 	@echo "  make          - Full setup and start (default)"
@@ -56,7 +56,7 @@ setup: check-deps setup-env
 setup-env:
 	@if [ ! -f .env ]; then \
 		echo "📝 Creating .env file..."; \
-		echo "CEDROS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/cedros_open_spawn" > .env; \
+		echo "CEDROS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/claw_spawn" > .env; \
 		echo "CEDROS_DIGITALOCEAN_TOKEN=your_digitalocean_api_token_here" >> .env; \
 		echo "CEDROS_ENCRYPTION_KEY=$$(openssl rand -base64 32)" >> .env; \
 		echo "CEDROS_SERVER_HOST=0.0.0.0" >> .env; \
@@ -97,24 +97,24 @@ migrate:
 # Build release binary
 build:
 	@echo "🔨 Building release binary..."
-	@cargo build --release --bin cedros-open-spawn-server
+	@cargo build --release --bin claw-spawn-server
 	@echo "✅ Build complete!"
-	@echo "   Binary: target/release/cedros-open-spawn-server"
+	@echo "   Binary: target/release/claw-spawn-server"
 	@echo ""
 
 # Quick build for development
 dev-build:
 	@echo "🔨 Building (dev mode)..."
-	@cargo build --bin cedros-open-spawn-server
+	@cargo build --bin claw-spawn-server
 
 # Start the server
 run:
 	@echo "🚀 Starting server..."
 	@if [ -z "$$CEDROS_DATABASE_URL" ]; then \
 		echo "📋 Loading environment from .env..."; \
-		export $$(grep -v '^#' .env | xargs) && ./target/release/cedros-open-spawn-server; \
+		export $$(grep -v '^#' .env | xargs) && ./target/release/claw-spawn-server; \
 	else \
-		./target/release/cedros-open-spawn-server; \
+		./target/release/claw-spawn-server; \
 	fi
 
 # Quick dev mode - compile and run with hot reload on file changes
@@ -123,9 +123,9 @@ dev: check-deps dev-build
 	@echo "   (Use Ctrl+C to stop)"
 	@echo ""
 	@if [ -z "$$CEDROS_DATABASE_URL" ]; then \
-		export $$(grep -v '^#' .env | xargs) && cargo run --bin cedros-open-spawn-server; \
+		export $$(grep -v '^#' .env | xargs) && cargo run --bin claw-spawn-server; \
 	else \
-		cargo run --bin cedros-open-spawn-server; \
+		cargo run --bin claw-spawn-server; \
 	fi
 
 # Run all tests
@@ -173,8 +173,8 @@ reset: clean
 # Build Docker image
 docker-build:
 	@echo "🐳 Building Docker image..."
-	@docker build -t cedros-open-spawn:latest .
-	@echo "✅ Docker image built: cedros-open-spawn:latest"
+	@docker build -t claw-spawn:latest .
+	@echo "✅ Docker image built: claw-spawn:latest"
 
 # Run with Docker Compose
 docker-run:

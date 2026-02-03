@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use cedros_open_spawn::domain::{EncryptedBotSecrets, RiskConfig, StoredBotConfig, TradingConfig};
-use cedros_open_spawn::infrastructure::{ConfigRepository, RepositoryError};
+use claw_spawn::domain::{EncryptedBotSecrets, RiskConfig, StoredBotConfig, TradingConfig};
+use claw_spawn::infrastructure::{ConfigRepository, RepositoryError};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 

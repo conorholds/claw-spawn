@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use cedros_open_spawn::{
+use claw_spawn::{
     application::{BotLifecycleService, ProvisioningError, ProvisioningService},
     domain::{
         Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona,
@@ -85,7 +85,7 @@ struct AppState {
         (name = "Configuration", description = "Bot configuration endpoints"),
     ),
     info(
-        title = "Cedros Open Spawn API",
+        title = "Claw Spawn API",
         version = "0.1.0",
         description = "API for managing trading bot provisioning and lifecycle",
         license(name = "MIT OR Apache-2.0")
@@ -233,9 +233,9 @@ async fn create_account(
     Json(req): Json<CreateAccountRequest>,
 ) -> impl IntoResponse {
     let tier = match req.tier.as_str() {
-        "basic" => cedros_open_spawn::domain::SubscriptionTier::Basic,
-        "pro" => cedros_open_spawn::domain::SubscriptionTier::Pro,
-        _ => cedros_open_spawn::domain::SubscriptionTier::Free,
+        "basic" => claw_spawn::domain::SubscriptionTier::Basic,
+        "pro" => claw_spawn::domain::SubscriptionTier::Pro,
+        _ => claw_spawn::domain::SubscriptionTier::Free,
     };
 
     let account = Account::new(req.external_id, tier);

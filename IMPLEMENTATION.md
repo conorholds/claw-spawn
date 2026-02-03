@@ -624,7 +624,7 @@ echo "=== Setup Complete at $(date) ==="
 
 #### docker-compose.yml
 - ✅ PostgreSQL service
-- ✅ cedros-open-spawn service
+- ✅ claw-spawn service
 - ✅ Health checks
 - ✅ Volume persistence
 

@@ -1,23 +1,23 @@
 [package]
-name = "cedros-open-spawn"
+name = "claw-spawn"
 version = "0.1.0"
 edition = "2021"
 authors = ["Cedros Team"]
 description = "Digital Ocean VPS provisioning and OpenClaw bot orchestration"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/cedros/cedros-open-spawn"
+repository = "https://github.com/cedros/claw-spawn"
 
 [features]
 default = ["server"]
 server = ["axum", "tokio/rt-multi-thread", "tower-http", "utoipa", "utoipa-swagger-ui"]
 
 [[bin]]
-name = "cedros-open-spawn-server"
+name = "claw-spawn-server"
 path = "src/main.rs"
 required-features = ["server"]
 
 [lib]
-name = "cedros_open_spawn"
+name = "claw_spawn"
 path = "src/lib.rs"
 
 [dependencies]

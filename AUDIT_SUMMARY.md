@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Repository:** cedros-open-spawn  
+**Repository:** claw-spawn  
 **Review Date:** 2026-02-03  
 **Completion Date:** 2026-02-03  
 **Total Issues Identified:** 28  

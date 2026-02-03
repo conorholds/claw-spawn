@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: cedros_open_spawn
+      POSTGRES_DB: claw_spawn
     ports:
       - "5432:5432"
     volumes:
@@ -18,13 +18,13 @@ services:
       timeout: 5s
       retries: 5
 
-  cedros-open-spawn:
+  claw-spawn:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cedros-open-spawn
+    container_name: claw-spawn
     environment:
-      CEDROS_DATABASE_URL: postgres://postgres:postgres@postgres:5432/cedros_open_spawn
+      CEDROS_DATABASE_URL: postgres://postgres:postgres@postgres:5432/claw_spawn
       CEDROS_DIGITALOCEAN_TOKEN: ${CEDROS_DIGITALOCEAN_TOKEN}
       CEDROS_ENCRYPTION_KEY: ${CEDROS_ENCRYPTION_KEY}
       CEDROS_SERVER_HOST: 0.0.0.0

@@ -1,4 +1,4 @@
-# Code Review: cedros-open-spawn
+# Code Review: claw-spawn
 **Date:** 2026-02-03  
 **Reviewer:** Senior Software Engineer  
 **Scope:** Complete codebase (Rust backend, shell scripts, infrastructure)

@@ -85,8 +85,8 @@ new file mode 100644
 @@ -0,0 +1,122 @@
 +#[cfg(test)]
 +mod tests {
-+    use cedros_open_spawn::domain::*;
-+    use cedros_open_spawn::infrastructure::*;
++    use claw_spawn::domain::*;
++    use claw_spawn::infrastructure::*;
 +    
 +    #[tokio::test]
 +    async fn test_risk_config_validation() {
@@ -116,7 +116,7 @@ new file mode 100644
 +    
 +    #[tokio::test]
 +    async fn test_encryption_roundtrip() {
-+        use cedros_open_spawn::infrastructure::SecretsEncryption;
++        use claw_spawn::infrastructure::SecretsEncryption;
 +        
 +        let key = "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=";
 +        let encryption = SecretsEncryption::new(key).unwrap();

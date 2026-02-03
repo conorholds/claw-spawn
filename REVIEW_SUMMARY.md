@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Repository:** cedros-open-spawn  
+**Repository:** claw-spawn  
 **Type:** Rust-based bot orchestration service with DigitalOcean VPS provisioning  
 **Review Date:** 2026-02-03  
 **Reviewer:** Senior Software Engineer  

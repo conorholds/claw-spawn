@@ -142,9 +142,9 @@ index abcd123..efgh456 100644
 @@ -123,9 +123,19 @@ async fn create_account(
  ) -> impl IntoResponse {
      let tier = match req.tier.as_str() {
--        "basic" => cedros_open_spawn::domain::SubscriptionTier::Basic,
--        "pro" => cedros_open_spawn::domain::SubscriptionTier::Pro,
--        _ => cedros_open_spawn::domain::SubscriptionTier::Free,
+-        "basic" => claw_spawn::domain::SubscriptionTier::Basic,
+-        "pro" => claw_spawn::domain::SubscriptionTier::Pro,
+-        _ => claw_spawn::domain::SubscriptionTier::Free,
 +        "basic" => SubscriptionTier::Basic,
 +        "pro" => SubscriptionTier::Pro,
 +        _ => SubscriptionTier::Free,

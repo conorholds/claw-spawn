@@ -1,4 +1,4 @@
-# cedros-open-spawn
+# claw-spawn
 
 Complete Digital Ocean VPS provisioning and OpenClaw bot orchestration service.
 
@@ -8,7 +8,7 @@ Just run `make` and you're ready to go:
 
 ```bash
 # Clone the repository
-cd cedros-open-spawn
+cd claw-spawn
 
 # Run everything (creates .env, sets up DB, runs migrations, builds, and starts server)
 make
@@ -50,7 +50,7 @@ The `Makefile` provides easy commands for development:
 ### 1. Set Environment Variables
 
 ```bash
-export CEDROS_DATABASE_URL="postgres://user:password@localhost/cedros_open_spawn"
+export CEDROS_DATABASE_URL="postgres://user:password@localhost/claw_spawn"
 export CEDROS_DIGITALOCEAN_TOKEN="your_digitalocean_api_token"
 export CEDROS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
@@ -59,7 +59,7 @@ export CEDROS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 
 ```bash
 # Create database
-createdb cedros_open_spawn
+createdb claw_spawn
 
 # Run migrations
 sqlx migrate run
@@ -69,10 +69,10 @@ sqlx migrate run
 
 ```bash
 # Build release binary
-cargo build --release --bin cedros-open-spawn-server
+cargo build --release --bin claw-spawn-server
 
 # Start server
-./target/release/cedros-open-spawn-server
+./target/release/claw-spawn-server
 ```
 
 ## 🐳 Docker Quick Start
@@ -175,7 +175,7 @@ curl -X POST http://localhost:8080/bots/{bot_id}/actions -d '{"action": "destroy
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    cedros-open-spawn                        │
+│                       claw-spawn                            │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │              Axum HTTP Server                          │  │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐│  │
@@ -281,7 +281,7 @@ CEDROS_SERVER_PORT=8081 make run
 Use as a library in your Rust project:
 
 ```rust
-use cedros_open_spawn::{
+use claw_spawn::{
     application::{ProvisioningService, BotLifecycleService},
     domain::{Account, BotConfig, Persona, SubscriptionTier},
     infrastructure::{AppConfig, DigitalOceanClient, PostgresAccountRepository},

@@ -194,7 +194,7 @@ $ cargo test
 ### Code Quality
 ```bash
 $ cargo clippy
-    Checking cedros-open-spawn...
+    Checking claw-spawn...
     Finished dev [unoptimized + debuginfo] target(s)
 ```
 ✅ **NO CLIPPY WARNINGS** (except 1 unrelated dead code warning)

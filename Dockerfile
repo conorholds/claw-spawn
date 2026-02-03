@@ -12,7 +12,7 @@ COPY migrations ./migrations
 COPY scripts ./scripts
 
 # Build release binary
-RUN cargo build --release --bin cedros-open-spawn-server
+RUN cargo build --release --bin claw-spawn-server
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -29,7 +29,7 @@ RUN apt-get update && \
 RUN useradd -m -s /bin/bash cedros
 
 # Copy binary from builder
-COPY --from=builder /app/target/release/cedros-open-spawn-server /usr/local/bin/
+COPY --from=builder /app/target/release/claw-spawn-server /usr/local/bin/
 COPY --from=builder /app/migrations /app/migrations
 
 # Set ownership
@@ -46,4 +46,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Run migrations and start server
-CMD ["sh", "-c", "cd /app && cedros-open-spawn-server"]
+CMD ["sh", "-c", "cd /app && claw-spawn-server"]
