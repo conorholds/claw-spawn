@@ -62,10 +62,13 @@ where
             return Err(LifecycleError::InvalidState(bot.status));
         }
 
+        // CRIT-007: Use atomic version generation to prevent race conditions
+        let next_version = self.config_repo.get_next_version_atomic(bot_id).await?;
+
         let config_with_version = StoredBotConfig {
             id: Uuid::new_v4(),
             bot_id,
-            version: self.get_next_version(bot_id).await?,
+            version: next_version,
             created_at: chrono::Utc::now(),
             ..config
         };
@@ -81,12 +84,6 @@ where
         );
 
         Ok(config_with_version)
-    }
-
-    async fn get_next_version(&self, bot_id: Uuid) -> Result<i32, LifecycleError> {
-        let configs = self.config_repo.list_by_bot(bot_id).await?;
-        let max_version = configs.iter().map(|c| c.version).max().unwrap_or(0);
-        Ok(max_version + 1)
     }
 
     pub async fn acknowledge_config(

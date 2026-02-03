@@ -96,6 +96,20 @@ impl ConfigRepository for PostgresConfigRepository {
 
         rows.iter().map(row_to_config).collect()
     }
+
+    async fn get_next_version_atomic(&self, bot_id: Uuid) -> Result<i32, RepositoryError> {
+        let row = sqlx::query(
+            r#"
+            SELECT get_next_config_version_atomic($1) as version
+            "#,
+        )
+        .bind(bot_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let version: i32 = row.try_get("version")?;
+        Ok(version)
+    }
 }
 
 fn row_to_config(row: &sqlx::postgres::PgRow) -> Result<StoredBotConfig, RepositoryError> {
