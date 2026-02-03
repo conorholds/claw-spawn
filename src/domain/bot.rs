@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use strum::{Display, EnumString};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -18,14 +19,16 @@ pub struct Bot {
     pub last_heartbeat_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum Persona {
     Beginner,
     Tweaker,
     QuantLite,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum BotStatus {
     Pending,
     Provisioning,

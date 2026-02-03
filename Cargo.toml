@@ -64,6 +64,9 @@ chrono = { version = "0.4", features = ["serde"] }
 # Validation
 validator = { version = "0.16", features = ["derive"] }
 
+# Enum utilities (MED-007)
+strum = { version = "0.25", features = ["derive"] }
+
 # Queue/background jobs (for provisioning queue)
 tokio-cron-scheduler = { version = "0.9", optional = true }
 

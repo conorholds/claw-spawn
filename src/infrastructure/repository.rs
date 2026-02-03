@@ -1,7 +1,8 @@
-use crate::domain::{Account, Bot, BotStatus, Droplet, StoredBotConfig, SubscriptionTier};
+use crate::domain::{Account, Bot, BotStatus, Droplet, Persona, StoredBotConfig, SubscriptionTier};
 use async_trait::async_trait;
 use chrono::Utc;
 use sqlx::{PgPool, Row};
+use std::str::FromStr;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -265,8 +266,8 @@ impl PostgresBotRepository {
 #[async_trait]
 impl BotRepository for PostgresBotRepository {
     async fn create(&self, bot: &Bot) -> Result<(), RepositoryError> {
-        let status_str = bot_status_to_string(&bot.status);
-        let persona_str = persona_to_string(&bot.persona);
+        let status_str = bot.status.to_string();
+        let persona_str = bot.persona.to_string();
 
         sqlx::query(
             r#"
@@ -356,7 +357,7 @@ impl BotRepository for PostgresBotRepository {
     }
 
     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError> {
-        let status_str = bot_status_to_string(&status);
+        let status_str = status.to_string();
 
         sqlx::query(
             r#"
@@ -524,45 +525,9 @@ impl BotRepository for PostgresBotRepository {
     }
 }
 
-fn bot_status_to_string(status: &BotStatus) -> String {
-    match status {
-        BotStatus::Pending => "pending".to_string(),
-        BotStatus::Provisioning => "provisioning".to_string(),
-        BotStatus::Online => "online".to_string(),
-        BotStatus::Paused => "paused".to_string(),
-        BotStatus::Error => "error".to_string(),
-        BotStatus::Destroyed => "destroyed".to_string(),
-    }
-}
-
-fn string_to_bot_status(status: &str) -> Result<BotStatus, RepositoryError> {
-    match status {
-        "pending" => Ok(BotStatus::Pending),
-        "provisioning" => Ok(BotStatus::Provisioning),
-        "online" => Ok(BotStatus::Online),
-        "paused" => Ok(BotStatus::Paused),
-        "error" => Ok(BotStatus::Error),
-        "destroyed" => Ok(BotStatus::Destroyed),
-        _ => Err(RepositoryError::InvalidData(format!("Unknown status: {}", status))),
-    }
-}
-
-fn persona_to_string(persona: &crate::domain::Persona) -> String {
-    match persona {
-        crate::domain::Persona::Beginner => "beginner".to_string(),
-        crate::domain::Persona::Tweaker => "tweaker".to_string(),
-        crate::domain::Persona::QuantLite => "quant_lite".to_string(),
-    }
-}
-
-fn string_to_persona(persona: &str) -> Result<crate::domain::Persona, RepositoryError> {
-    match persona {
-        "beginner" => Ok(crate::domain::Persona::Beginner),
-        "tweaker" => Ok(crate::domain::Persona::Tweaker),
-        "quant_lite" => Ok(crate::domain::Persona::QuantLite),
-        _ => Err(RepositoryError::InvalidData(format!("Unknown persona: {}", persona))),
-    }
-}
+// MED-007: Status and persona mapping now handled by strum derive macros
+// BotStatus and Persona enums use #[derive(Display, EnumString)] for automatic
+// String <-> Enum conversion with snake_case serialization.
 
 fn row_to_bot(row: &sqlx::postgres::PgRow) -> Result<Bot, RepositoryError> {
     let status_str: String = row.try_get("status")?;
@@ -572,8 +537,10 @@ fn row_to_bot(row: &sqlx::postgres::PgRow) -> Result<Bot, RepositoryError> {
         id: row.try_get("id")?,
         account_id: row.try_get("account_id")?,
         name: row.try_get("name")?,
-        persona: string_to_persona(&persona_str)?,
-        status: string_to_bot_status(&status_str)?,
+        persona: Persona::from_str(&persona_str)
+            .map_err(|_| RepositoryError::InvalidData(format!("Unknown persona: {}", persona_str)))?,
+        status: BotStatus::from_str(&status_str)
+            .map_err(|_| RepositoryError::InvalidData(format!("Unknown status: {}", status_str)))?,
         droplet_id: row.try_get("droplet_id")?,
         desired_config_version_id: row.try_get("desired_config_version_id")?,
         applied_config_version_id: row.try_get("applied_config_version_id")?,
