@@ -291,17 +291,21 @@
    - **Status:** Complete
    - **Completion Note:** Build successful. Efficient count query avoids loading all bot records when only count is needed. Single SQL COUNT(*) query returns count in O(1) time regardless of bot count.
 
-### [ ] PERF-002: Missing Pagination on List Endpoints
-- **File:** `src/main.rs:136-152`
-- **Issue:** /accounts/:id/bots returns ALL bots without limit
-- **Fix:**
-  - Add limit/offset parameters
-  - Default limit of 100
-- **Test Plan:**
-  - Create 1000 bots
-  - Query with limit=10
-  - Verify only 10 returned
-- **Status:** Pending
+### [x] PERF-002: Missing Pagination on List Endpoints
+   - **File:** `src/main.rs:136-152`
+   - **Issue:** /accounts/:id/bots returns ALL bots without limit
+   - **Fix:**
+   - Added PaginationParams struct with limit/offset query parameters
+   - Default limit: 100, max limit: 1000 (enforced via clamping)
+   - Added list_by_account_paginated() method to repository
+   - Updated lifecycle and handler to use paginated queries
+   - Original list_by_account() kept for backward compatibility
+   - **Test Plan:**
+   - Create 1000 bots
+   - Query with limit=10
+   - Verify only 10 returned
+   - **Status:** Complete
+   - **Completion Note:** Build successful. Pagination prevents loading all bots at once. Default 100 items per page, max 1000 enforced server-side. Uses SQL LIMIT/OFFSET for efficient database-level pagination.
 
 ## RELIABILITY ISSUES
 
