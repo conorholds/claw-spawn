@@ -95,6 +95,12 @@ cd /opt/openclaw
 # Bootstrap customized workspace layout (best-effort)
 echo "=== Bootstrapping Clawdbot Workspace (janebot-cli) ==="
 CUSTOMIZER_LOG="/var/log/openclaw-bot.log"
+CUSTOMIZER_MARKER="/opt/openclaw/.customizer_ran"
+CUSTOMIZER_STATUS_FILE="/opt/openclaw/customizer_status.txt"
+
+if [ -f "$CUSTOMIZER_MARKER" ]; then
+    echo "Customizer already ran; skipping workspace bootstrap" | tee -a "$CUSTOMIZER_LOG"
+else
 CUSTOMIZER_STATUS=0
 set +e
 
@@ -153,6 +159,21 @@ set -e
 if [ $CUSTOMIZER_STATUS -ne 0 ]; then
     echo "WARN: janebot-cli customization failed (status=$CUSTOMIZER_STATUS) at $(date); continuing bootstrap" \
         | tee -a "$CUSTOMIZER_LOG"
+fi
+
+# Mark as attempted so reboots don't re-run customization.
+{
+    echo "customizer_repo_url=$CUSTOMIZER_REPO_URL"
+    echo "customizer_ref=$CUSTOMIZER_REF"
+    echo "workspace_dir=$CUSTOMIZER_WORKSPACE_DIR"
+    echo "agent_name=$CUSTOMIZER_AGENT_NAME"
+    echo "owner_name=$CUSTOMIZER_OWNER_NAME"
+    echo "exit_status=$CUSTOMIZER_STATUS"
+    echo "finished_at=$(date -Iseconds)"
+} >"$CUSTOMIZER_STATUS_FILE" 2>/dev/null || true
+
+touch "$CUSTOMIZER_MARKER" 2>/dev/null || true
+chown openclaw:openclaw "$CUSTOMIZER_MARKER" "$CUSTOMIZER_STATUS_FILE" 2>/dev/null || true
 fi
 
 # Create the bot configuration file
