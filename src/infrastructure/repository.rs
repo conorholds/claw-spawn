@@ -17,9 +17,13 @@ pub enum RepositoryError {
 
 #[async_trait]
 pub trait AccountRepository: Send + Sync {
+    #[must_use]
     async fn create(&self, account: &Account) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn get_by_id(&self, id: Uuid) -> Result<Account, RepositoryError>;
+    #[must_use]
     async fn get_by_external_id(&self, external_id: &str) -> Result<Account, RepositoryError>;
+    #[must_use]
     async fn update_subscription(
         &self,
         id: Uuid,
@@ -29,31 +33,44 @@ pub trait AccountRepository: Send + Sync {
 
 #[async_trait]
 pub trait BotRepository: Send + Sync {
+    #[must_use]
     async fn create(&self, bot: &Bot) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn get_by_id(&self, id: Uuid) -> Result<Bot, RepositoryError>;
+    #[must_use]
     async fn get_by_id_with_token(&self, id: Uuid, token: &str) -> Result<Bot, RepositoryError>;
+    #[must_use]
     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError>;
+    #[must_use]
     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn update_droplet(
         &self,
         bot_id: Uuid,
         droplet_id: Option<i64>,
     ) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn update_config_version(
         &self,
         bot_id: Uuid,
         desired: Option<Uuid>,
         applied: Option<Uuid>,
     ) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn update_heartbeat(&self, bot_id: Uuid) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn update_registration_token(&self, bot_id: Uuid, token: &str) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
     /// Atomically increment bot counter for account, returning (success, current_count, max_count)
     /// CRIT-002: Prevents race conditions in account limit checking
+    #[must_use]
     async fn increment_bot_counter(&self, account_id: Uuid) -> Result<(bool, i32, i32), RepositoryError>;
     /// Decrement bot counter when bot is destroyed
+    #[must_use]
     async fn decrement_bot_counter(&self, account_id: Uuid) -> Result<(), RepositoryError>;
     /// List bots with stale heartbeats (HIGH-001)
+    #[must_use]
     async fn list_stale_bots(
         &self,
         threshold: chrono::DateTime<chrono::Utc>,
@@ -62,34 +79,45 @@ pub trait BotRepository: Send + Sync {
 
 #[async_trait]
 pub trait ConfigRepository: Send + Sync {
+    #[must_use]
     async fn create(&self, config: &StoredBotConfig) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn get_by_id(&self, id: Uuid) -> Result<StoredBotConfig, RepositoryError>;
+    #[must_use]
     async fn get_latest_for_bot(&self, bot_id: Uuid) -> Result<Option<StoredBotConfig>, RepositoryError>;
+    #[must_use]
     async fn list_by_bot(&self, bot_id: Uuid) -> Result<Vec<StoredBotConfig>, RepositoryError>;
     /// Get next config version atomically using advisory locks
     /// CRIT-007: Prevents duplicate version numbers under concurrent updates
+    #[must_use]
     async fn get_next_version_atomic(&self, bot_id: Uuid) -> Result<i32, RepositoryError>;
 }
 
 #[async_trait]
 pub trait DropletRepository: Send + Sync {
+    #[must_use]
     async fn create(&self, droplet: &Droplet) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn get_by_id(&self, id: i64) -> Result<Droplet, RepositoryError>;
+    #[must_use]
     async fn update_bot_assignment(
         &self,
         droplet_id: i64,
         bot_id: Option<Uuid>,
     ) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn update_status(
         &self,
         droplet_id: i64,
         status: &str,
     ) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn update_ip(
         &self,
         droplet_id: i64,
         ip: Option<String>,
     ) -> Result<(), RepositoryError>;
+    #[must_use]
     async fn mark_destroyed(&self, droplet_id: i64) -> Result<(), RepositoryError>;
 }
 
