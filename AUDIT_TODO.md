@@ -15,7 +15,7 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Removed xtrace (`set -x`) from user-data and bootstrap script; added `f001_user_data_does_not_enable_xtrace`; verified via `cargo test`
 
-- [ ] F-002 Fix advisory-lock key generation for atomic config versioning
+- [x] F-002 Fix advisory-lock key generation for atomic config versioning
   - Files: `migrations/*` (new migration)
   - Planned fix:
     - Replace lock key derivation with a safe bigint (e.g., `hashtextextended(p_bot_id::text, 0)`)
@@ -23,6 +23,8 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Test plan:
     - `cargo test`
     - (Manual) Run `SELECT get_next_config_version_atomic('<uuid>'::uuid);` twice and confirm increments
+  - Completed:
+    - Added `migrations/005_fix_config_version_lock.sql` using `hashtextextended` for the advisory lock key; verified via `cargo test`
 
 ## High
 
