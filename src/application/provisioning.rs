@@ -120,6 +120,217 @@ where
     control_plane_url: String,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+
+    #[derive(Default)]
+    struct NoopAccountRepo;
+    #[async_trait]
+    impl AccountRepository for NoopAccountRepo {
+        async fn create(&self, _account: &crate::domain::Account) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_by_id(&self, _id: Uuid) -> Result<crate::domain::Account, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_by_external_id(
+            &self,
+            _external_id: &str,
+        ) -> Result<crate::domain::Account, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_subscription(
+            &self,
+            _id: Uuid,
+            _tier: crate::domain::SubscriptionTier,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+    }
+
+    #[derive(Default)]
+    struct NoopBotRepo;
+    #[async_trait]
+    impl BotRepository for NoopBotRepo {
+        async fn create(&self, _bot: &Bot) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_by_id(&self, _id: Uuid) -> Result<Bot, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_by_id_with_token(
+            &self,
+            _id: Uuid,
+            _token: &str,
+        ) -> Result<Bot, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn list_by_account(&self, _account_id: Uuid) -> Result<Vec<Bot>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn list_by_account_paginated(
+            &self,
+            _account_id: Uuid,
+            _limit: i64,
+            _offset: i64,
+        ) -> Result<Vec<Bot>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn count_by_account(&self, _account_id: Uuid) -> Result<i64, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_status(
+            &self,
+            _id: Uuid,
+            _status: BotStatus,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_droplet(
+            &self,
+            _bot_id: Uuid,
+            _droplet_id: Option<i64>,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_config_version(
+            &self,
+            _bot_id: Uuid,
+            _desired: Option<Uuid>,
+            _applied: Option<Uuid>,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_heartbeat(&self, _bot_id: Uuid) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_registration_token(
+            &self,
+            _bot_id: Uuid,
+            _token: &str,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn delete(&self, _id: Uuid) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn increment_bot_counter(
+            &self,
+            _account_id: Uuid,
+        ) -> Result<(bool, i32, i32), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn decrement_bot_counter(&self, _account_id: Uuid) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn list_stale_bots(
+            &self,
+            _threshold: chrono::DateTime<chrono::Utc>,
+        ) -> Result<Vec<Bot>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+    }
+
+    #[derive(Default)]
+    struct NoopConfigRepo;
+    #[async_trait]
+    impl ConfigRepository for NoopConfigRepo {
+        async fn create(&self, _config: &StoredBotConfig) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_by_id(&self, _id: Uuid) -> Result<StoredBotConfig, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_latest_for_bot(
+            &self,
+            _bot_id: Uuid,
+        ) -> Result<Option<StoredBotConfig>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn list_by_bot(
+            &self,
+            _bot_id: Uuid,
+        ) -> Result<Vec<StoredBotConfig>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_next_version_atomic(&self, _bot_id: Uuid) -> Result<i32, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+    }
+
+    #[derive(Default)]
+    struct NoopDropletRepo;
+    #[async_trait]
+    impl DropletRepository for NoopDropletRepo {
+        async fn create(
+            &self,
+            _droplet: &crate::domain::Droplet,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_by_id(
+            &self,
+            _id: i64,
+        ) -> Result<crate::domain::Droplet, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_bot_assignment(
+            &self,
+            _droplet_id: i64,
+            _bot_id: Option<Uuid>,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_status(
+            &self,
+            _droplet_id: i64,
+            _status: &str,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_ip(
+            &self,
+            _droplet_id: i64,
+            _ip: Option<String>,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn mark_destroyed(&self, _droplet_id: i64) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+    }
+
+    #[test]
+    fn f001_user_data_does_not_enable_xtrace() {
+        let encryption = Arc::new(
+            SecretsEncryption::new("YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=")
+                .expect("valid test key"),
+        );
+        let do_client = Arc::new(DigitalOceanClient::new("test-token".to_string()).unwrap());
+
+        let svc: ProvisioningService<NoopAccountRepo, NoopBotRepo, NoopConfigRepo, NoopDropletRepo> =
+            ProvisioningService::new(
+                do_client,
+                Arc::new(NoopAccountRepo::default()),
+                Arc::new(NoopBotRepo::default()),
+                Arc::new(NoopConfigRepo::default()),
+                Arc::new(NoopDropletRepo::default()),
+                encryption,
+                "ubuntu-22-04-x64".to_string(),
+                "https://example.invalid".to_string(),
+            );
+
+        let bot_id = Uuid::new_v4();
+        let user_data = svc.test_only_generate_user_data("reg-token", bot_id);
+        assert!(!user_data.lines().any(|l| l.trim() == "set -x"));
+
+        let embedded = include_str!("../../scripts/openclaw-bootstrap.sh");
+        assert!(!embedded.lines().any(|l| l.trim() == "set -x"));
+    }
+}
+
 impl<A, B, C, D> ProvisioningService<A, B, C, D>
 where
     A: AccountRepository,
@@ -375,7 +586,9 @@ where
             r##"#!/bin/bash
 # OpenClaw Bot Bootstrap for Bot {}
 set -e
-set -x
+
+# NOTE: Do not enable `set -x` (xtrace). This user-data includes secrets
+# (registration token) and xtrace would leak them into cloud-init logs.
 
 export REGISTRATION_TOKEN="{}"
 export BOT_ID="{}"
@@ -390,6 +603,34 @@ export CONTROL_PLANE_URL="{}"
             self.control_plane_url,
             bootstrap_script
         )
+    }
+
+    #[cfg(test)]
+    fn test_only_generate_user_data(&self, registration_token: &str, bot_id: Uuid) -> String {
+        // Helper to keep tests focused without additional config setup.
+        self.generate_user_data(registration_token, bot_id, &StoredBotConfig {
+            id: Uuid::new_v4(),
+            bot_id,
+            version: 1,
+            trading_config: crate::domain::TradingConfig {
+                asset_focus: crate::domain::AssetFocus::Majors,
+                algorithm: crate::domain::AlgorithmMode::Trend,
+                strictness: crate::domain::StrictnessLevel::Medium,
+                paper_mode: true,
+                signal_knobs: None,
+            },
+            risk_config: crate::domain::RiskConfig {
+                max_position_size_pct: 10.0,
+                max_daily_loss_pct: 5.0,
+                max_drawdown_pct: 10.0,
+                max_trades_per_day: 10,
+            },
+            secrets: crate::domain::EncryptedBotSecrets {
+                llm_provider: "test".to_string(),
+                llm_api_key_encrypted: vec![1, 2, 3],
+            },
+            created_at: chrono::Utc::now(),
+        })
     }
 
     fn generate_registration_token(&self, _bot_id: Uuid) -> String {

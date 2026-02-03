@@ -3,7 +3,9 @@
 # This script is embedded in the DigitalOcean droplet user_data
 
 set -e
-set -x
+
+# NOTE: Do not enable `set -x` (xtrace). This script handles secrets (registration token)
+# and xtrace would leak them into cloud-init logs.
 
 export DEBIAN_FRONTEND=noninteractive
 
