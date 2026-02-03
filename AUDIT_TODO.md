@@ -233,16 +233,19 @@
 - **Status:** Complete
 - **Completion Note:** Build successful. Bot is fetched once and reused for both the conflict check and status update. Returns clear error when acknowledging outdated config.
 
-### [ ] MED-005: Unwrap on User Input (Bot Name)
-- **File:** `src/application/provisioning.rs:36` (indirect)
-- **Issue:** Potential panic if bot name causes issues in droplet name
-- **Fix:**
-  - Sanitize droplet name
-  - Handle edge cases
-- **Test Plan:**
-  - Create bot with special characters in name
-  - Verify safe droplet name generation
-- **Status:** Pending
+### [x] MED-005: Unwrap on User Input (Bot Name)
+   - **File:** `src/application/provisioning.rs:36` (indirect)
+   - **Issue:** Potential panic if bot name causes issues in droplet name
+   - **Fix:**
+   - Added sanitize_bot_name() function with MAX_BOT_NAME_LENGTH (64 chars)
+   - Replaces special characters with underscores, allows alphanumeric/spaces/hyphens
+   - Trims whitespace and limits length
+   - Integrated sanitization into create_bot() before Bot::new() call
+   - **Test Plan:**
+   - Create bot with special characters in name
+   - Verify safe droplet name generation
+   - **Status:** Complete
+   - **Completion Note:** Build successful. Bot names are now sanitized before use, preventing injection and truncation issues. Sanitization removes/replaces special characters and enforces 64-character limit.
 
 ### [x] MED-006: Missing Encryption Key Validation
 - **File:** `src/infrastructure/crypto.rs:24-41`

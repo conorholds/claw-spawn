@@ -42,6 +42,10 @@ pub trait BotRepository: Send + Sync {
     async fn get_by_id_with_token(&self, id: Uuid, token: &str) -> Result<Bot, RepositoryError>;
     #[must_use]
     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError>;
+    /// PERF-001: Count bots for account without fetching all rows
+    /// Use SQL COUNT(*) instead of list_by_account().len()
+    #[must_use]
+    async fn count_by_account(&self, account_id: Uuid) -> Result<i64, RepositoryError>;
     #[must_use]
     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError>;
     #[must_use]
@@ -354,6 +358,21 @@ impl BotRepository for PostgresBotRepository {
         .await?;
 
         rows.iter().map(row_to_bot).collect()
+    }
+
+    async fn count_by_account(&self, account_id: Uuid) -> Result<i64, RepositoryError> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*) 
+            FROM bots 
+            WHERE account_id = $1
+            "#,
+        )
+        .bind(account_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(count)
     }
 
     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError> {
