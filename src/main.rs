@@ -38,6 +38,50 @@ fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
         .filter(|t| !t.is_empty())
 }
 
+fn parse_subscription_tier(tier: &str) -> Option<claw_spawn::domain::SubscriptionTier> {
+    match tier {
+        "free" => Some(claw_spawn::domain::SubscriptionTier::Free),
+        "basic" => Some(claw_spawn::domain::SubscriptionTier::Basic),
+        "pro" => Some(claw_spawn::domain::SubscriptionTier::Pro),
+        _ => None,
+    }
+}
+
+fn parse_persona(persona: &str) -> Option<Persona> {
+    match persona {
+        "beginner" => Some(Persona::Beginner),
+        "tweaker" => Some(Persona::Tweaker),
+        "quant_lite" => Some(Persona::QuantLite),
+        _ => None,
+    }
+}
+
+fn parse_asset_focus(asset_focus: &str) -> Option<AssetFocus> {
+    match asset_focus {
+        "majors" => Some(AssetFocus::Majors),
+        "memes" => Some(AssetFocus::Memes),
+        _ => None,
+    }
+}
+
+fn parse_algorithm(algorithm: &str) -> Option<AlgorithmMode> {
+    match algorithm {
+        "trend" => Some(AlgorithmMode::Trend),
+        "mean_reversion" => Some(AlgorithmMode::MeanReversion),
+        "breakout" => Some(AlgorithmMode::Breakout),
+        _ => None,
+    }
+}
+
+fn parse_strictness(strictness: &str) -> Option<StrictnessLevel> {
+    match strictness {
+        "low" => Some(StrictnessLevel::Low),
+        "medium" => Some(StrictnessLevel::Medium),
+        "high" => Some(StrictnessLevel::High),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -65,6 +109,15 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Basic abc123"));
         assert_eq!(extract_bearer_token(&headers), None);
+    }
+
+    #[test]
+    fn f005_parse_invalid_inputs_return_none() {
+        assert!(parse_subscription_tier("nope").is_none());
+        assert!(parse_persona("nope").is_none());
+        assert!(parse_asset_focus("nope").is_none());
+        assert!(parse_algorithm("nope").is_none());
+        assert!(parse_strictness("nope").is_none());
     }
 }
 
@@ -263,6 +316,7 @@ struct CreateAccountRequest {
     request_body = CreateAccountRequest,
     responses(
         (status = 201, description = "Account created successfully", body = Object),
+        (status = 400, description = "Invalid subscription tier", body = Object),
         (status = 500, description = "Failed to create account", body = Object)
     )
 )]
@@ -270,10 +324,17 @@ async fn create_account(
     State(state): State<AppState>,
     Json(req): Json<CreateAccountRequest>,
 ) -> impl IntoResponse {
-    let tier = match req.tier.as_str() {
-        "basic" => claw_spawn::domain::SubscriptionTier::Basic,
-        "pro" => claw_spawn::domain::SubscriptionTier::Pro,
-        _ => claw_spawn::domain::SubscriptionTier::Free,
+    let tier = match parse_subscription_tier(req.tier.as_str()) {
+        Some(t) => t,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "Invalid subscription tier",
+                    "allowed": ["free", "basic", "pro"]
+                })),
+            );
+        }
     };
 
     let account = Account::new(req.external_id, tier);
@@ -424,31 +485,56 @@ async fn create_bot(
     State(state): State<AppState>,
     Json(req): Json<CreateBotRequest>,
 ) -> impl IntoResponse {
-    let persona = match req.persona.as_str() {
-        "beginner" => Persona::Beginner,
-        "tweaker" => Persona::Tweaker,
-        "quant_lite" => Persona::QuantLite,
-        _ => Persona::Beginner,
+    let persona = match parse_persona(req.persona.as_str()) {
+        Some(p) => p,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "Invalid persona",
+                    "allowed": ["beginner", "tweaker", "quant_lite"]
+                })),
+            );
+        }
     };
 
-    let asset_focus = match req.asset_focus.as_str() {
-        "majors" => AssetFocus::Majors,
-        "memes" => AssetFocus::Memes,
-        _ => AssetFocus::Majors,
+    let asset_focus = match parse_asset_focus(req.asset_focus.as_str()) {
+        Some(a) => a,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "Invalid asset_focus",
+                    "allowed": ["majors", "memes"]
+                })),
+            );
+        }
     };
 
-    let algorithm = match req.algorithm.as_str() {
-        "trend" => AlgorithmMode::Trend,
-        "mean_reversion" => AlgorithmMode::MeanReversion,
-        "breakout" => AlgorithmMode::Breakout,
-        _ => AlgorithmMode::Trend,
+    let algorithm = match parse_algorithm(req.algorithm.as_str()) {
+        Some(a) => a,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "Invalid algorithm",
+                    "allowed": ["trend", "mean_reversion", "breakout"]
+                })),
+            );
+        }
     };
 
-    let strictness = match req.strictness.as_str() {
-        "low" => StrictnessLevel::Low,
-        "medium" => StrictnessLevel::Medium,
-        "high" => StrictnessLevel::High,
-        _ => StrictnessLevel::Medium,
+    let strictness = match parse_strictness(req.strictness.as_str()) {
+        Some(s) => s,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "Invalid strictness",
+                    "allowed": ["low", "medium", "high"]
+                })),
+            );
+        }
     };
 
     let trading_config = TradingConfig {

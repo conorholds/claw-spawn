@@ -50,7 +50,7 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Made retries run exactly `RETRY_ATTEMPTS` with sleeps only between attempts; added `f004_retry_with_backoff_uses_exact_attempt_count`; verified via `cargo test`
 
-- [ ] F-005 Reject invalid enum-like inputs instead of silently defaulting
+- [x] F-005 Reject invalid enum-like inputs instead of silently defaulting
   - Files: `src/main.rs`
   - Planned fix:
     - Return 400 for unknown `tier`, `persona`, `asset_focus`, `algorithm`, `strictness`
@@ -58,6 +58,8 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Test plan:
     - `cargo test`
     - (Manual) curl invalid payloads -> 400
+  - Completed:
+    - Added strict parsers and 400 responses for invalid inputs; added `f005_parse_invalid_inputs_return_none`; verified via `cargo test`
 
 ## Medium
 
