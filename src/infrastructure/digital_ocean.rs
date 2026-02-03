@@ -3,6 +3,7 @@ use reqwest::{Client, header};
 use serde_json::json;
 use std::time::Duration;
 use thiserror::Error;
+use tokio::time::sleep;
 
 #[derive(Error, Debug)]
 pub enum DigitalOceanError {
@@ -18,6 +19,17 @@ pub enum DigitalOceanError {
     InvalidResponse(String),
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
+    #[error("Max retries exceeded for DO API call")]
+    MaxRetriesExceeded,
+}
+
+/// REL-002: Retry configuration for DO API calls
+const MAX_RETRIES: u32 = 3;
+const INITIAL_BACKOFF_MS: u64 = 1000;
+
+/// Check if status code is retryable (500, 502, 503)
+fn is_retryable_status(status: u16) -> bool {
+    matches!(status, 500 | 502 | 503)
 }
 
 pub struct DigitalOceanClient {
@@ -77,107 +89,185 @@ impl DigitalOceanClient {
             "backups": false,
         });
 
-        let response = self
-            .client
-            .post(format!("{}/droplets", self.base_url))
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| DigitalOceanError::RequestFailed(e.to_string()))?;
+        let mut last_error = None;
+        for attempt in 0..MAX_RETRIES {
+            let response = self
+                .client
+                .post(format!("{}/droplets", self.base_url))
+                .json(&body)
+                .send()
+                .await;
 
-        if response.status().as_u16() == 429 {
-            return Err(DigitalOceanError::RateLimited);
+            match response {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    
+                    if status == 429 {
+                        return Err(DigitalOceanError::RateLimited);
+                    }
+
+                    // REL-002: Retry on 500, 502, 503 with exponential backoff
+                    if is_retryable_status(status) && attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                        continue;
+                    }
+
+                    if !resp.status().is_success() {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
+                        return Err(DigitalOceanError::CreationFailed(error_text));
+                    }
+
+                    let json_response: serde_json::Value = resp
+                        .json()
+                        .await
+                        .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
+
+                    let droplet_data = json_response
+                        .get("droplet")
+                        .ok_or_else(|| DigitalOceanError::InvalidResponse("Missing droplet field".to_string()))?;
+
+                    let do_response: crate::domain::DigitalOceanDropletResponse =
+                        serde_json::from_value(droplet_data.clone())
+                            .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
+
+                    return Ok(Droplet::from_do_response(do_response));
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    if attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                    }
+                }
+            }
         }
 
-        if !response.status().is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(DigitalOceanError::CreationFailed(error_text));
-        }
-
-        let json_response: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
-
-        let droplet_data = json_response
-            .get("droplet")
-            .ok_or_else(|| DigitalOceanError::InvalidResponse("Missing droplet field".to_string()))?;
-
-        let do_response: crate::domain::DigitalOceanDropletResponse =
-            serde_json::from_value(droplet_data.clone())
-                .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
-
-        Ok(Droplet::from_do_response(do_response))
+        Err(DigitalOceanError::RequestFailed(
+            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+        ))
     }
 
     pub async fn get_droplet(&self, droplet_id: i64) -> Result<Droplet, DigitalOceanError> {
-        let response = self
-            .client
-            .get(format!("{}/droplets/{}", self.base_url, droplet_id))
-            .send()
-            .await
-            .map_err(|e| DigitalOceanError::RequestFailed(e.to_string()))?;
+        let mut last_error = None;
+        for attempt in 0..MAX_RETRIES {
+            let response = self
+                .client
+                .get(format!("{}/droplets/{}", self.base_url, droplet_id))
+                .send()
+                .await;
 
-        if response.status().as_u16() == 429 {
-            return Err(DigitalOceanError::RateLimited);
+            match response {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    
+                    if status == 429 {
+                        return Err(DigitalOceanError::RateLimited);
+                    }
+
+                    if status == 404 {
+                        return Err(DigitalOceanError::NotFound(droplet_id));
+                    }
+
+                    // REL-002: Retry on 500, 502, 503 with exponential backoff
+                    if is_retryable_status(status) && attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                        continue;
+                    }
+
+                    if !resp.status().is_success() {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
+                        return Err(DigitalOceanError::RequestFailed(error_text));
+                    }
+
+                    let json_response: serde_json::Value = resp
+                        .json()
+                        .await
+                        .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
+
+                    let droplet_data = json_response
+                        .get("droplet")
+                        .ok_or_else(|| DigitalOceanError::InvalidResponse("Missing droplet field".to_string()))?;
+
+                    let do_response: crate::domain::DigitalOceanDropletResponse =
+                        serde_json::from_value(droplet_data.clone())
+                            .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
+
+                    return Ok(Droplet::from_do_response(do_response));
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    if attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                    }
+                }
+            }
         }
 
-        if response.status().as_u16() == 404 {
-            return Err(DigitalOceanError::NotFound(droplet_id));
-        }
-
-        if !response.status().is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(DigitalOceanError::RequestFailed(error_text));
-        }
-
-        let json_response: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
-
-        let droplet_data = json_response
-            .get("droplet")
-            .ok_or_else(|| DigitalOceanError::InvalidResponse("Missing droplet field".to_string()))?;
-
-        let do_response: crate::domain::DigitalOceanDropletResponse =
-            serde_json::from_value(droplet_data.clone())
-                .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
-
-        Ok(Droplet::from_do_response(do_response))
+        Err(DigitalOceanError::RequestFailed(
+            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+        ))
     }
 
     pub async fn destroy_droplet(&self, droplet_id: i64) -> Result<(), DigitalOceanError> {
-        let response = self
-            .client
-            .delete(format!("{}/droplets/{}", self.base_url, droplet_id))
-            .send()
-            .await
-            .map_err(|e| DigitalOceanError::RequestFailed(e.to_string()))?;
+        let mut last_error = None;
+        for attempt in 0..MAX_RETRIES {
+            let response = self
+                .client
+                .delete(format!("{}/droplets/{}", self.base_url, droplet_id))
+                .send()
+                .await;
 
-        if response.status().as_u16() == 429 {
-            return Err(DigitalOceanError::RateLimited);
+            match response {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    
+                    if status == 429 {
+                        return Err(DigitalOceanError::RateLimited);
+                    }
+
+                    if status == 404 {
+                        return Err(DigitalOceanError::NotFound(droplet_id));
+                    }
+
+                    // REL-002: Retry on 500, 502, 503 with exponential backoff
+                    if is_retryable_status(status) && attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                        continue;
+                    }
+
+                    if !resp.status().is_success() {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
+                        return Err(DigitalOceanError::RequestFailed(error_text));
+                    }
+
+                    return Ok(());
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    if attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                    }
+                }
+            }
         }
 
-        if response.status().as_u16() == 404 {
-            return Err(DigitalOceanError::NotFound(droplet_id));
-        }
-
-        if !response.status().is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(DigitalOceanError::RequestFailed(error_text));
-        }
-
-        Ok(())
+        Err(DigitalOceanError::RequestFailed(
+            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+        ))
     }
 
     pub async fn shutdown_droplet(&self, droplet_id: i64) -> Result<(), DigitalOceanError> {
@@ -185,27 +275,53 @@ impl DigitalOceanClient {
             "type": "shutdown",
         });
 
-        let response = self
-            .client
-            .post(format!("{}/droplets/{}/actions", self.base_url, droplet_id))
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| DigitalOceanError::RequestFailed(e.to_string()))?;
+        let mut last_error = None;
+        for attempt in 0..MAX_RETRIES {
+            let response = self
+                .client
+                .post(format!("{}/droplets/{}/actions", self.base_url, droplet_id))
+                .json(&body)
+                .send()
+                .await;
 
-        if response.status().as_u16() == 429 {
-            return Err(DigitalOceanError::RateLimited);
+            match response {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    
+                    if status == 429 {
+                        return Err(DigitalOceanError::RateLimited);
+                    }
+
+                    // REL-002: Retry on 500, 502, 503 with exponential backoff
+                    if is_retryable_status(status) && attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                        continue;
+                    }
+
+                    if !resp.status().is_success() {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
+                        return Err(DigitalOceanError::RequestFailed(error_text));
+                    }
+
+                    return Ok(());
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    if attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                    }
+                }
+            }
         }
 
-        if !response.status().is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(DigitalOceanError::RequestFailed(error_text));
-        }
-
-        Ok(())
+        Err(DigitalOceanError::RequestFailed(
+            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+        ))
     }
 
     pub async fn reboot_droplet(&self, droplet_id: i64) -> Result<(), DigitalOceanError> {
@@ -213,26 +329,52 @@ impl DigitalOceanClient {
             "type": "reboot",
         });
 
-        let response = self
-            .client
-            .post(format!("{}/droplets/{}/actions", self.base_url, droplet_id))
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| DigitalOceanError::RequestFailed(e.to_string()))?;
+        let mut last_error = None;
+        for attempt in 0..MAX_RETRIES {
+            let response = self
+                .client
+                .post(format!("{}/droplets/{}/actions", self.base_url, droplet_id))
+                .json(&body)
+                .send()
+                .await;
 
-        if response.status().as_u16() == 429 {
-            return Err(DigitalOceanError::RateLimited);
+            match response {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    
+                    if status == 429 {
+                        return Err(DigitalOceanError::RateLimited);
+                    }
+
+                    // REL-002: Retry on 500, 502, 503 with exponential backoff
+                    if is_retryable_status(status) && attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                        continue;
+                    }
+
+                    if !resp.status().is_success() {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
+                        return Err(DigitalOceanError::RequestFailed(error_text));
+                    }
+
+                    return Ok(());
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    if attempt < MAX_RETRIES - 1 {
+                        let backoff = INITIAL_BACKOFF_MS * 2_u64.pow(attempt);
+                        sleep(Duration::from_millis(backoff)).await;
+                    }
+                }
+            }
         }
 
-        if !response.status().is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(DigitalOceanError::RequestFailed(error_text));
-        }
-
-        Ok(())
+        Err(DigitalOceanError::RequestFailed(
+            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+        ))
     }
 }
