@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "INTACOM": {
+      "command": "/Users/conorholdsworth/Workspace/ai_assistant/intacom/intacom-rs/target/release/intacom-mcp",
+      "args": []
+    }
+  }
+}

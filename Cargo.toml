@@ -1,0 +1,76 @@
+[package]
+name = "cedros-open-spawn"
+version = "0.1.0"
+edition = "2021"
+authors = ["Cedros Team"]
+description = "Digital Ocean VPS provisioning and OpenClaw bot orchestration"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/cedros/cedros-open-spawn"
+
+[features]
+default = ["server"]
+server = ["axum", "tokio/rt-multi-thread", "tower-http"]
+
+[[bin]]
+name = "cedros-open-spawn-server"
+path = "src/main.rs"
+required-features = ["server"]
+
+[lib]
+name = "cedros_open_spawn"
+path = "src/lib.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["macros", "sync", "time"] }
+
+# Async trait support
+async-trait = "0.1"
+
+# HTTP client for DigitalOcean API
+reqwest = { version = "0.11", features = ["json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_bytes = "0.11"
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres", "uuid", "chrono", "migrate"] }
+
+# Configuration
+config = "0.14"
+dotenvy = "0.15"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Crypto for secrets encryption
+aes-gcm = "0.10"
+rand = "0.8"
+base64 = { version = "0.21", features = ["std"] }
+
+# IDs
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Validation
+validator = { version = "0.16", features = ["derive"] }
+
+# Queue/background jobs (for provisioning queue)
+tokio-cron-scheduler = { version = "0.9", optional = true }
+
+# Server-only deps (optional)
+axum = { version = "0.7", features = ["tokio", "http1", "json"], optional = true }
+tower-http = { version = "0.5", features = ["trace", "cors"], optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockall = "0.12"

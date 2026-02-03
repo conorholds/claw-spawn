@@ -1,0 +1,295 @@
+# cedros-open-spawn
+
+Complete Digital Ocean VPS provisioning and OpenClaw bot orchestration service.
+
+## 🚀 Super Quick Start (One Command)
+
+Just run `make` and you're ready to go:
+
+```bash
+# Clone the repository
+cd cedros-open-spawn
+
+# Run everything (creates .env, sets up DB, runs migrations, builds, and starts server)
+make
+```
+
+**That's it!** The server will start on http://localhost:8080
+
+Then edit `.env` and add your DigitalOcean API token:
+```bash
+# Edit the .env file
+CEDROS_DIGITALOCEAN_TOKEN=your_actual_token_here
+```
+
+## 📋 Makefile Commands
+
+The `Makefile` provides easy commands for development:
+
+| Command | Description |
+|---------|-------------|
+| `make` | **Full setup and start** (default) |
+| `make dev` | Quick dev mode with hot reload |
+| `make setup` | Initial environment setup only |
+| `make db` | Create database |
+| `make migrate` | Run database migrations |
+| `make build` | Build release binary |
+| `make run` | Start the server |
+| `make test` | Run all tests |
+| `make clean` | Clean build artifacts |
+| `make docker-run` | Run with Docker Compose |
+| `make help` | Show all available commands |
+
+## 🔧 Manual Setup (If You Prefer)
+
+### Prerequisites
+- Rust/Cargo: https://rustup.rs/
+- PostgreSQL: `brew install postgresql` (macOS) or `apt-get install postgresql`
+- sqlx-cli: `cargo install sqlx-cli`
+
+### 1. Set Environment Variables
+
+```bash
+export CEDROS_DATABASE_URL="postgres://user:password@localhost/cedros_open_spawn"
+export CEDROS_DIGITALOCEAN_TOKEN="your_digitalocean_api_token"
+export CEDROS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+```
+
+### 2. Setup Database
+
+```bash
+# Create database
+createdb cedros_open_spawn
+
+# Run migrations
+sqlx migrate run
+```
+
+### 3. Build and Run
+
+```bash
+# Build release binary
+cargo build --release --bin cedros-open-spawn-server
+
+# Start server
+./target/release/cedros-open-spawn-server
+```
+
+## 🐳 Docker Quick Start
+
+```bash
+# Start with Docker Compose (includes PostgreSQL)
+make docker-run
+
+# Or manually:
+docker-compose up --build
+```
+
+The Docker setup includes:
+- PostgreSQL database (auto-created)
+- Automatic migrations on startup
+- Server exposed on port 8080
+
+## 📦 Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CEDROS_DATABASE_URL` | Yes | - | PostgreSQL connection string |
+| `CEDROS_DIGITALOCEAN_TOKEN` | Yes | - | DigitalOcean API token |
+| `CEDROS_ENCRYPTION_KEY` | Yes | - | Base64-encoded 32-byte key |
+| `CEDROS_SERVER_HOST` | No | `0.0.0.0` | Server bind address |
+| `CEDROS_SERVER_PORT` | No | `8080` | Server port |
+| `CEDROS_OPENCLAW_IMAGE` | No | `ubuntu-22-04-x64` | DO droplet image |
+
+## 🎯 API Usage Examples
+
+### Create a Bot
+
+```bash
+curl -X POST http://localhost:8080/bots \
+  -H "Content-Type: application/json" \
+  -d '{
+    "account_id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "My First Bot",
+    "persona": "beginner",
+    "asset_focus": "majors",
+    "algorithm": "trend",
+    "strictness": "medium",
+    "paper_mode": true,
+    "max_position_size_pct": 10.0,
+    "max_daily_loss_pct": 5.0,
+    "max_drawdown_pct": 15.0,
+    "max_trades_per_day": 20,
+    "llm_provider": "openai",
+    "llm_api_key": "sk-your-openai-key-here"
+  }'
+```
+
+Response:
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "account_id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "My First Bot",
+  "persona": "beginner",
+  "status": "provisioning",
+  "droplet_id": 123456789,
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
+### Check Bot Status
+
+```bash
+curl http://localhost:8080/bots/{bot_id}
+```
+
+### Bot Actions
+
+```bash
+# Pause
+curl -X POST http://localhost:8080/bots/{bot_id}/actions -d '{"action": "pause"}'
+
+# Resume  
+curl -X POST http://localhost:8080/bots/{bot_id}/actions -d '{"action": "resume"}'
+
+# Destroy
+curl -X POST http://localhost:8080/bots/{bot_id}/actions -d '{"action": "destroy"}'
+```
+
+## 📚 API Endpoints
+
+### App Endpoints
+- `POST /bots` - Create bot
+- `GET /bots/:id` - Get bot details
+- `GET /accounts/:id/bots` - List account bots
+- `POST /bots/:id/actions` - pause/resume/redeploy/destroy
+
+### Bot Agent Endpoints
+- `GET /bot/:id/config` - Pull config
+- `POST /bot/:id/config_ack` - Acknowledge config
+- `POST /bot/:id/heartbeat` - Health check
+- `POST /bot/register` - Initial registration
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    cedros-open-spawn                        │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              Axum HTTP Server                          │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐│  │
+│  │  │  App API     │  │  Bot API     │  │  Health      ││  │
+│  │  │  (/bots/*)   │  │  (/bot/*)    │  │  (/health)   ││  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘│  │
+│  └──────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              Application Layer                       │  │
+│  │  ┌──────────────┐  ┌──────────────┐                  │  │
+│  │  │Provisioning │  │   BotLifecycle              │  │
+│  │  │   Service    │  │   Service                     │  │
+│  │  └──────────────┘  └──────────────┘                  │  │
+│  └──────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              Infrastructure Layer                    │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌────────────┐│  │
+│  │  │DigitalOcean │  │PostgreSQL    │  │  Crypto    ││  │
+│  │  │   Client     │  │Repositories  │  │(AES-256)   ││  │
+│  │  └──────────────┘  └──────────────┘  └────────────┘│  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                  ┌───────────────────────┐
+                  │   DigitalOcean VPS    │
+                  │  ┌─────────────────┐  │
+                  │  │  OpenClaw Bot   │  │
+                  │  │   Agent         │  │
+                  │  └─────────────────┘  │
+                  └───────────────────────┘
+```
+
+## 🔐 Security
+
+- **AES-256-GCM encryption** for all secrets (LLM API keys)
+- **Per-bot registration tokens** for authentication
+- **Firewall rules** on droplets (default deny inbound)
+- **No secrets in logs** - all sensitive data redacted
+
+## 📖 Documentation
+
+- **Setup Guide**: See [Setup Instructions](#setup-instructions) above
+- **API Reference**: See [API Usage Examples](#api-usage-examples)
+- **Architecture**: See [Architecture](#architecture) section
+
+## 🛠️ Development
+
+```bash
+# Quick dev cycle
+make dev
+
+# Run tests
+make test
+
+# Check code
+make check
+
+# Format code
+make fmt
+
+# Lint
+make lint
+```
+
+## 📝 Database Migrations
+
+```bash
+# Create migration
+make migrate-add
+
+# Run migrations
+make migrate
+
+# Check status
+make migrate-status
+
+# Revert last
+make migrate-revert
+```
+
+## 🧹 Troubleshooting
+
+### "sqlx-cli not found"
+```bash
+make install-sqlx
+```
+
+### "Database connection failed"
+```bash
+# Check PostgreSQL is running
+make db
+```
+
+### "Port 8080 already in use"
+```bash
+# Edit .env and change CEDROS_SERVER_PORT
+CEDROS_SERVER_PORT=8081 make run
+```
+
+## 🤝 Library Usage
+
+Use as a library in your Rust project:
+
+```rust
+use cedros_open_spawn::{
+    application::{ProvisioningService, BotLifecycleService},
+    domain::{Account, BotConfig, Persona, SubscriptionTier},
+    infrastructure::{AppConfig, DigitalOceanClient, PostgresAccountRepository},
+};
+
+// See README.md for full example
+```
+
+## 📄 License
+
+MIT OR Apache-2.0

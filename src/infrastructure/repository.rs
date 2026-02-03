@@ -1,0 +1,446 @@
+use crate::domain::{Account, Bot, BotStatus, Droplet, StoredBotConfig, SubscriptionTier};
+use async_trait::async_trait;
+use chrono::Utc;
+use sqlx::{PgPool, Row};
+use thiserror::Error;
+use uuid::Uuid;
+
+#[derive(Error, Debug)]
+pub enum RepositoryError {
+    #[error("Database error: {0}")]
+    DatabaseError(#[from] sqlx::Error),
+    #[error("Not found: {0}")]
+    NotFound(String),
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
+}
+
+#[async_trait]
+pub trait AccountRepository: Send + Sync {
+    async fn create(&self, account: &Account) -> Result<(), RepositoryError>;
+    async fn get_by_id(&self, id: Uuid) -> Result<Account, RepositoryError>;
+    async fn get_by_external_id(&self, external_id: &str) -> Result<Account, RepositoryError>;
+    async fn update_subscription(
+        &self,
+        id: Uuid,
+        tier: SubscriptionTier,
+    ) -> Result<(), RepositoryError>;
+}
+
+#[async_trait]
+pub trait BotRepository: Send + Sync {
+    async fn create(&self, bot: &Bot) -> Result<(), RepositoryError>;
+    async fn get_by_id(&self, id: Uuid) -> Result<Bot, RepositoryError>;
+    async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError>;
+    async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError>;
+    async fn update_droplet(
+        &self,
+        bot_id: Uuid,
+        droplet_id: Option<i64>,
+    ) -> Result<(), RepositoryError>;
+    async fn update_config_version(
+        &self,
+        bot_id: Uuid,
+        desired: Option<Uuid>,
+        applied: Option<Uuid>,
+    ) -> Result<(), RepositoryError>;
+    async fn update_heartbeat(&self, bot_id: Uuid) -> Result<(), RepositoryError>;
+    async fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+}
+
+#[async_trait]
+pub trait ConfigRepository: Send + Sync {
+    async fn create(&self, config: &StoredBotConfig) -> Result<(), RepositoryError>;
+    async fn get_by_id(&self, id: Uuid) -> Result<StoredBotConfig, RepositoryError>;
+    async fn get_latest_for_bot(&self, bot_id: Uuid) -> Result<Option<StoredBotConfig>, RepositoryError>;
+    async fn list_by_bot(&self, bot_id: Uuid) -> Result<Vec<StoredBotConfig>, RepositoryError>;
+}
+
+#[async_trait]
+pub trait DropletRepository: Send + Sync {
+    async fn create(&self, droplet: &Droplet) -> Result<(), RepositoryError>;
+    async fn get_by_id(&self, id: i64) -> Result<Droplet, RepositoryError>;
+    async fn update_bot_assignment(
+        &self,
+        droplet_id: i64,
+        bot_id: Option<Uuid>,
+    ) -> Result<(), RepositoryError>;
+    async fn update_status(
+        &self,
+        droplet_id: i64,
+        status: &str,
+    ) -> Result<(), RepositoryError>;
+    async fn update_ip(
+        &self,
+        droplet_id: i64,
+        ip: Option<String>,
+    ) -> Result<(), RepositoryError>;
+    async fn mark_destroyed(&self, droplet_id: i64) -> Result<(), RepositoryError>;
+}
+
+pub struct PostgresAccountRepository {
+    pool: PgPool,
+}
+
+impl PostgresAccountRepository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+impl AccountRepository for PostgresAccountRepository {
+    async fn create(&self, account: &Account) -> Result<(), RepositoryError> {
+        let tier_str = match account.subscription_tier {
+            SubscriptionTier::Free => "free",
+            SubscriptionTier::Basic => "basic",
+            SubscriptionTier::Pro => "pro",
+        };
+
+        sqlx::query(
+            r#"
+            INSERT INTO accounts (id, external_id, subscription_tier, max_bots, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            "#,
+        )
+        .bind(account.id)
+        .bind(&account.external_id)
+        .bind(tier_str)
+        .bind(account.max_bots)
+        .bind(account.created_at)
+        .bind(account.updated_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_by_id(&self, id: Uuid) -> Result<Account, RepositoryError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, external_id, subscription_tier, max_bots, created_at, updated_at
+            FROM accounts
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => RepositoryError::NotFound(format!("Account {}", id)),
+            _ => RepositoryError::DatabaseError(e),
+        })?;
+
+        Ok(row_to_account(&row)?)
+    }
+
+    async fn get_by_external_id(&self, external_id: &str) -> Result<Account, RepositoryError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, external_id, subscription_tier, max_bots, created_at, updated_at
+            FROM accounts
+            WHERE external_id = $1
+            "#,
+        )
+        .bind(external_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => {
+                RepositoryError::NotFound(format!("Account {}", external_id))
+            }
+            _ => RepositoryError::DatabaseError(e),
+        })?;
+
+        Ok(row_to_account(&row)?)
+    }
+
+    async fn update_subscription(
+        &self,
+        id: Uuid,
+        tier: SubscriptionTier,
+    ) -> Result<(), RepositoryError> {
+        let tier_str = match tier {
+            SubscriptionTier::Free => "free",
+            SubscriptionTier::Basic => "basic",
+            SubscriptionTier::Pro => "pro",
+        };
+
+        let max_bots = match tier {
+            SubscriptionTier::Free => 0,
+            SubscriptionTier::Basic => 2,
+            SubscriptionTier::Pro => 4,
+        };
+
+        sqlx::query(
+            r#"
+            UPDATE accounts
+            SET subscription_tier = $1, max_bots = $2, updated_at = $3
+            WHERE id = $4
+            "#,
+        )
+        .bind(tier_str)
+        .bind(max_bots)
+        .bind(Utc::now())
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+}
+
+fn row_to_account(row: &sqlx::postgres::PgRow) -> Result<Account, RepositoryError> {
+    let tier_str: String = row.try_get("subscription_tier")?;
+    let tier = match tier_str.as_str() {
+        "free" => SubscriptionTier::Free,
+        "basic" => SubscriptionTier::Basic,
+        "pro" => SubscriptionTier::Pro,
+        _ => return Err(RepositoryError::InvalidData(format!("Unknown tier: {}", tier_str))),
+    };
+
+    Ok(Account {
+        id: row.try_get("id")?,
+        external_id: row.try_get("external_id")?,
+        subscription_tier: tier,
+        max_bots: row.try_get("max_bots")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+pub struct PostgresBotRepository {
+    pool: PgPool,
+}
+
+impl PostgresBotRepository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+impl BotRepository for PostgresBotRepository {
+    async fn create(&self, bot: &Bot) -> Result<(), RepositoryError> {
+        let status_str = bot_status_to_string(&bot.status);
+        let persona_str = persona_to_string(&bot.persona);
+
+        sqlx::query(
+            r#"
+            INSERT INTO bots (id, account_id, name, persona, status, droplet_id, 
+                             desired_config_version_id, applied_config_version_id, 
+                             created_at, updated_at, last_heartbeat_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            "#,
+        )
+        .bind(bot.id)
+        .bind(bot.account_id)
+        .bind(&bot.name)
+        .bind(persona_str)
+        .bind(status_str)
+        .bind(bot.droplet_id)
+        .bind(bot.desired_config_version_id)
+        .bind(bot.applied_config_version_id)
+        .bind(bot.created_at)
+        .bind(bot.updated_at)
+        .bind(bot.last_heartbeat_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_by_id(&self, id: Uuid) -> Result<Bot, RepositoryError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, account_id, name, persona, status, droplet_id,
+                   desired_config_version_id, applied_config_version_id,
+                   created_at, updated_at, last_heartbeat_at
+            FROM bots
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => RepositoryError::NotFound(format!("Bot {}", id)),
+            _ => RepositoryError::DatabaseError(e),
+        })?;
+
+        Ok(row_to_bot(&row)?)
+    }
+
+    async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, account_id, name, persona, status, droplet_id,
+                   desired_config_version_id, applied_config_version_id,
+                   created_at, updated_at, last_heartbeat_at
+            FROM bots
+            WHERE account_id = $1
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(account_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.iter().map(row_to_bot).collect()
+    }
+
+    async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError> {
+        let status_str = bot_status_to_string(&status);
+
+        sqlx::query(
+            r#"
+            UPDATE bots
+            SET status = $1, updated_at = $2
+            WHERE id = $3
+            "#,
+        )
+        .bind(status_str)
+        .bind(Utc::now())
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn update_droplet(
+        &self,
+        bot_id: Uuid,
+        droplet_id: Option<i64>,
+    ) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            UPDATE bots
+            SET droplet_id = $1, updated_at = $2
+            WHERE id = $3
+            "#,
+        )
+        .bind(droplet_id)
+        .bind(Utc::now())
+        .bind(bot_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn update_config_version(
+        &self,
+        bot_id: Uuid,
+        desired: Option<Uuid>,
+        applied: Option<Uuid>,
+    ) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            UPDATE bots
+            SET desired_config_version_id = $1, applied_config_version_id = $2, updated_at = $3
+            WHERE id = $4
+            "#,
+        )
+        .bind(desired)
+        .bind(applied)
+        .bind(Utc::now())
+        .bind(bot_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn update_heartbeat(&self, bot_id: Uuid) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            UPDATE bots
+            SET last_heartbeat_at = $1, updated_at = $2
+            WHERE id = $3
+            "#,
+        )
+        .bind(Utc::now())
+        .bind(Utc::now())
+        .bind(bot_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            UPDATE bots
+            SET status = 'destroyed', updated_at = $1
+            WHERE id = $2
+            "#,
+        )
+        .bind(Utc::now())
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+}
+
+fn bot_status_to_string(status: &BotStatus) -> String {
+    match status {
+        BotStatus::Pending => "pending".to_string(),
+        BotStatus::Provisioning => "provisioning".to_string(),
+        BotStatus::Online => "online".to_string(),
+        BotStatus::Paused => "paused".to_string(),
+        BotStatus::Error => "error".to_string(),
+        BotStatus::Destroyed => "destroyed".to_string(),
+    }
+}
+
+fn string_to_bot_status(status: &str) -> Result<BotStatus, RepositoryError> {
+    match status {
+        "pending" => Ok(BotStatus::Pending),
+        "provisioning" => Ok(BotStatus::Provisioning),
+        "online" => Ok(BotStatus::Online),
+        "paused" => Ok(BotStatus::Paused),
+        "error" => Ok(BotStatus::Error),
+        "destroyed" => Ok(BotStatus::Destroyed),
+        _ => Err(RepositoryError::InvalidData(format!("Unknown status: {}", status))),
+    }
+}
+
+fn persona_to_string(persona: &crate::domain::Persona) -> String {
+    match persona {
+        crate::domain::Persona::Beginner => "beginner".to_string(),
+        crate::domain::Persona::Tweaker => "tweaker".to_string(),
+        crate::domain::Persona::QuantLite => "quant_lite".to_string(),
+    }
+}
+
+fn string_to_persona(persona: &str) -> Result<crate::domain::Persona, RepositoryError> {
+    match persona {
+        "beginner" => Ok(crate::domain::Persona::Beginner),
+        "tweaker" => Ok(crate::domain::Persona::Tweaker),
+        "quant_lite" => Ok(crate::domain::Persona::QuantLite),
+        _ => Err(RepositoryError::InvalidData(format!("Unknown persona: {}", persona))),
+    }
+}
+
+fn row_to_bot(row: &sqlx::postgres::PgRow) -> Result<Bot, RepositoryError> {
+    let status_str: String = row.try_get("status")?;
+    let persona_str: String = row.try_get("persona")?;
+
+    Ok(Bot {
+        id: row.try_get("id")?,
+        account_id: row.try_get("account_id")?,
+        name: row.try_get("name")?,
+        persona: string_to_persona(&persona_str)?,
+        status: string_to_bot_status(&status_str)?,
+        droplet_id: row.try_get("droplet_id")?,
+        desired_config_version_id: row.try_get("desired_config_version_id")?,
+        applied_config_version_id: row.try_get("applied_config_version_id")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        last_heartbeat_at: row.try_get("last_heartbeat_at")?,
+    })
+}
