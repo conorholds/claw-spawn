@@ -84,12 +84,17 @@ echo "=== Creating Bot User ==="
 useradd -m -s /bin/bash -U openclaw || true
 usermod -aG docker openclaw
 
+# Prepare log file early so bootstrap steps are captured
+touch /var/log/openclaw-bot.log
+chown openclaw:openclaw /var/log/openclaw-bot.log
+
 # Create working directories
 mkdir -p /opt/openclaw
 cd /opt/openclaw
 
 # Bootstrap customized workspace layout (best-effort)
 echo "=== Bootstrapping Clawdbot Workspace (janebot-cli) ==="
+CUSTOMIZER_LOG="/var/log/openclaw-bot.log"
 CUSTOMIZER_STATUS=0
 set +e
 
@@ -98,7 +103,7 @@ mkdir -p "$(dirname "$JANE_DIR")" "$CUSTOMIZER_WORKSPACE_DIR"
 chown -R openclaw:openclaw "$CUSTOMIZER_WORKSPACE_DIR"
 
 if [ ! -d "$JANE_DIR/.git" ]; then
-    git clone --no-checkout "$CUSTOMIZER_REPO_URL" "$JANE_DIR"
+    git clone --no-checkout "$CUSTOMIZER_REPO_URL" "$JANE_DIR" >>"$CUSTOMIZER_LOG" 2>&1
 fi
 
 (
@@ -112,7 +117,8 @@ fi
     git checkout -f FETCH_HEAD || git checkout -f "$CUSTOMIZER_REF"
 
     npm ci
-) || CUSTOMIZER_STATUS=$?
+) >>"$CUSTOMIZER_LOG" 2>&1 \
+    || CUSTOMIZER_STATUS=$?
 
 CUSTOMIZER_ARGS=(
     init
@@ -137,14 +143,16 @@ if [ "$CUSTOMIZER_SKIP_HEARTBEAT" = "true" ]; then
 fi
 
 if [ $CUSTOMIZER_STATUS -eq 0 ]; then
-    sudo -u openclaw -H node "$JANE_DIR/bin/janebot-cli.js" "${CUSTOMIZER_ARGS[@]}"
+    sudo -u openclaw -H node "$JANE_DIR/bin/janebot-cli.js" "${CUSTOMIZER_ARGS[@]}" \
+        >>"$CUSTOMIZER_LOG" 2>&1
     CUSTOMIZER_STATUS=$?
 fi
 
 set -e
 
 if [ $CUSTOMIZER_STATUS -ne 0 ]; then
-    echo "WARN: janebot-cli customization failed (status=$CUSTOMIZER_STATUS) at $(date); continuing bootstrap"
+    echo "WARN: janebot-cli customization failed (status=$CUSTOMIZER_STATUS) at $(date); continuing bootstrap" \
+        | tee -a "$CUSTOMIZER_LOG"
 fi
 
 # Create the bot configuration file
