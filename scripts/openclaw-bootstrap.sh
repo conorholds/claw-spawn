@@ -178,7 +178,8 @@ Wants=docker.service
 
 [Service]
 Type=simple
-User=root
+User=openclaw
+Group=openclaw
 WorkingDirectory=/opt/openclaw
 Environment="CONTROL_PLANE_URL=${CONTROL_PLANE_URL}"
 Environment="BOT_ID=${BOT_ID}"
@@ -192,6 +193,12 @@ StandardError=append:/var/log/openclaw-bot.log
 [Install]
 WantedBy=multi-user.target
 EOFSERVICE
+
+# Set proper ownership for /opt/openclaw and log file
+echo "=== Setting Permissions ==="
+chown -R openclaw:openclaw /opt/openclaw
+touch /var/log/openclaw-bot.log
+chown openclaw:openclaw /var/log/openclaw-bot.log
 
 # Setup firewall
 echo "=== Configuring Firewall ==="
