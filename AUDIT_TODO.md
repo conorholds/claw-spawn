@@ -219,17 +219,19 @@
 - **Status:** Complete
 - **Completion Note:** Service now runs as openclaw user. Permissions set during bootstrap ensure bot user can access working directory and log files.
 
-### [ ] MED-004: Missing Config Version Conflict Detection
+### [x] MED-004: Missing Config Version Conflict Detection
 - **File:** `src/application/lifecycle.rs:88-111`
 - **Issue:** acknowledge_config doesn't check if newer config exists
 - **Fix:**
-  - Check desired_config_version_id == config_id before acknowledging
-  - Reject acknowledgments for outdated configs
+  - Added `ConfigVersionConflict` error variant to `LifecycleError`
+  - Check `desired_config_version_id == config_id` before acknowledging
+  - Reject acknowledgments for outdated configs with proper error
 - **Test Plan:**
   - Create config v1, then v2
   - Try acknowledge v1 after v2 exists
   - Expect rejection
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. Bot is fetched once and reused for both the conflict check and status update. Returns clear error when acknowledging outdated config.
 
 ### [ ] MED-005: Unwrap on User Input (Bot Name)
 - **File:** `src/application/provisioning.rs:36` (indirect)
@@ -306,16 +308,20 @@
   - Verify eventual consistency
 - **Status:** Pending
 
-### [ ] REL-002: No Retry Logic for DO API Calls
+### [x] REL-002: No Retry Logic for DO API Calls
 - **File:** `src/infrastructure/digital_ocean.rs`
 - **Issue:** Only rate limiting (429) handled, not 500s or network errors
 - **Fix:**
-  - Add exponential backoff retry
-  - Handle 500, 502, 503 errors
+  - Added `MaxRetriesExceeded` error variant to `DigitalOceanError`
+  - Implemented retry loop with exponential backoff (1s, 2s, 4s) for all DO API methods
+  - Max 3 retries with backoff: 1s, 2s, 4s using `tokio::time::sleep`
+  - Retry on 500, 502, 503 server errors and network failures
+  - Rate limiting (429) returns immediately without retry
 - **Test Plan:**
   - Mock DO API returning 500 then 200
   - Verify retry succeeds
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. All 5 DO API methods (create_droplet, get_droplet, destroy_droplet, shutdown_droplet, reboot_droplet) now have retry logic with exponential backoff.
 
 ### [ ] REL-003: Missing Error Context in Logs
 - **File:** Multiple
@@ -330,15 +336,20 @@
 
 ## CLEANUP / MAINTAINABILITY
 
-### [ ] CLEAN-001: Add #[must_use] to Repository Methods
+### [x] CLEAN-001: Add #[must_use] to Repository Methods
 - **File:** `src/infrastructure/repository.rs`
 - **Issue:** Repository methods return Results that could be ignored
 - **Fix:**
-  - Add #[must_use] annotation
+  - Added `#[must_use]` annotation to all async methods in repository traits
+  - AccountRepository: 4 methods annotated
+  - BotRepository: 12 methods annotated
+  - ConfigRepository: 5 methods annotated
+  - DropletRepository: 6 methods annotated
 - **Test Plan:**
   - Build with warnings as errors
   - Verify no warnings
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. All 27 async repository methods now have `#[must_use]` attribute to prevent accidentally ignoring Result return values.
 
 ### [ ] CLEAN-002: Replace String-based Status with Enums
 - **File:** Database layer
@@ -374,13 +385,17 @@
   - Verify all endpoints documented
 - **Status:** Pending
 
-### [ ] CLEAN-005: Add Health Check for DB
+### [x] CLEAN-005: Add Health Check for DB
 - **File:** `src/main.rs:101-103`
 - **Issue:** Health check only returns OK, doesn't check DB
 - **Fix:**
-  - Add detailed health check
-  - Verify DB connectivity
+  - Added `pool: PgPool` field to AppState for DB connectivity access
+  - Updated health_check handler to execute `SELECT 1` query to verify DB connectivity
+  - Returns 200 OK with `{"status": "healthy"}` when DB is up
+  - Returns 503 SERVICE_UNAVAILABLE with `{"status": "unhealthy"}` when DB is down
+  - Added error logging for DB connectivity failures
 - **Test Plan:**
   - Stop DB
-  - Verify health check fails
-- **Status:** Pending
+  - Verify health check fails with 503
+- **Status:** Complete
+- **Completion Note:** Build successful. Health check now actually verifies database connectivity and returns appropriate status codes. Failed health checks are logged with error details.
