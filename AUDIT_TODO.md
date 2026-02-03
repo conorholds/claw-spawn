@@ -46,18 +46,20 @@
 - **Status:** Complete
 - **Completion Note:** Build successful. Accounts are now persisted to database before being used. The handler properly returns 500 on database error with logging.
 
-### [ ] CRIT-004: Missing Timeouts - HTTP Client Can Hang Indefinitely
+### [x] CRIT-004: Missing Timeouts - HTTP Client Can Hang Indefinitely
 - **File:** `src/infrastructure/digital_ocean.rs:28-49`
 - **Issue:** DigitalOcean HTTP client created without timeout configuration
 - **Fix:**
-  - Add `.timeout(Duration::from_secs(30))`
-  - Add `.connect_timeout(Duration::from_secs(10))`
-  - Add timeout error handling
+  - Added `std::time::Duration` import
+  - Added `.timeout(Duration::from_secs(30))` to Client builder
+  - Added `.connect_timeout(Duration::from_secs(10))`
+  - Added `.pool_idle_timeout(Duration::from_secs(90))`
 - **Test Plan:**
   - Mock DO API with 60s delay
   - Call create_droplet()
   - Verify it returns timeout error after 30s
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. HTTP client now has 30s request timeout, 10s connect timeout, and 90s pool idle timeout.
 
 ### [ ] CRIT-005: Resource Leak - Droplets Orphaned on Partial Failure
 - **File:** `src/application/provisioning.rs:150-180`

@@ -1,6 +1,7 @@
 use crate::domain::{Droplet, DropletCreateRequest};
 use reqwest::{Client, header};
 use serde_json::json;
+use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -38,6 +39,10 @@ impl DigitalOceanClient {
 
         let client = Client::builder()
             .default_headers(headers)
+            // CRIT-004: Add timeouts to prevent hanging requests
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(90))
             .build()
             .expect("Failed to create HTTP client");
 
