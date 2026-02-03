@@ -14,6 +14,8 @@ pub enum LifecycleError {
     InvalidState(BotStatus),
     #[error("Config not found: {0}")]
     ConfigNotFound(Uuid),
+    #[error("Config version conflict: acknowledging {acknowledged}, but desired is {desired:?}")]
+    ConfigVersionConflict { acknowledged: Uuid, desired: Option<Uuid> },
 }
 
 pub struct BotLifecycleService<B, C>
@@ -98,14 +100,21 @@ where
             return Err(LifecycleError::ConfigNotFound(config_id));
         }
 
+        // MED-004: Check for config version conflict
+        let bot = self.bot_repo.get_by_id(bot_id).await?;
+        if bot.desired_config_version_id != Some(config_id) {
+            return Err(LifecycleError::ConfigVersionConflict {
+                acknowledged: config_id,
+                desired: bot.desired_config_version_id,
+            });
+        }
+
         self.bot_repo
             .update_config_version(bot_id, Some(config_id), Some(config_id))
             .await?;
 
-        if let Ok(bot) = self.bot_repo.get_by_id(bot_id).await {
-            if bot.status == BotStatus::Provisioning || bot.status == BotStatus::Pending {
-                self.bot_repo.update_status(bot_id, BotStatus::Online).await?;
-            }
+        if bot.status == BotStatus::Provisioning || bot.status == BotStatus::Pending {
+            self.bot_repo.update_status(bot_id, BotStatus::Online).await?;
         }
 
         info!("Bot {} acknowledged config {}", bot_id, config_id);
