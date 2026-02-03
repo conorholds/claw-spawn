@@ -24,11 +24,11 @@ services:
       dockerfile: Dockerfile
     container_name: claw-spawn
     environment:
-      CEDROS_DATABASE_URL: postgres://postgres:postgres@postgres:5432/claw_spawn
-      CEDROS_DIGITALOCEAN_TOKEN: ${CEDROS_DIGITALOCEAN_TOKEN}
-      CEDROS_ENCRYPTION_KEY: ${CEDROS_ENCRYPTION_KEY}
-      CEDROS_SERVER_HOST: 0.0.0.0
-      CEDROS_SERVER_PORT: 8080
+      CLAW_DATABASE_URL: postgres://postgres:postgres@postgres:5432/claw_spawn
+      CLAW_DIGITALOCEAN_TOKEN: ${CLAW_DIGITALOCEAN_TOKEN}
+      CLAW_ENCRYPTION_KEY: ${CLAW_ENCRYPTION_KEY}
+      CLAW_SERVER_HOST: 0.0.0.0
+      CLAW_SERVER_PORT: 8080
     ports:
       - "8080:8080"
     depends_on:

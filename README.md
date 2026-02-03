@@ -23,7 +23,7 @@ make
 Then edit `.env` and add your DigitalOcean API token:
 ```bash
 # Edit the .env file
-CEDROS_DIGITALOCEAN_TOKEN=your_actual_token_here
+CLAW_DIGITALOCEAN_TOKEN=your_actual_token_here
 ```
 
 ## 📋 Makefile Commands
@@ -54,9 +54,9 @@ The `Makefile` provides easy commands for development:
 ### 1. Set Environment Variables
 
 ```bash
-export CEDROS_DATABASE_URL="postgres://user:password@localhost/claw_spawn"
-export CEDROS_DIGITALOCEAN_TOKEN="your_digitalocean_api_token"
-export CEDROS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+export CLAW_DATABASE_URL="postgres://user:password@localhost/claw_spawn"
+export CLAW_DIGITALOCEAN_TOKEN="your_digitalocean_api_token"
+export CLAW_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
 
 ### 2. Setup Database
@@ -98,26 +98,26 @@ The Docker setup includes:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `CEDROS_DATABASE_URL` | Yes | - | PostgreSQL connection string |
-| `CEDROS_DIGITALOCEAN_TOKEN` | Yes | - | DigitalOcean API token |
-| `CEDROS_ENCRYPTION_KEY` | Yes | - | Base64-encoded 32-byte key |
-| `CEDROS_SERVER_HOST` | No | `0.0.0.0` | Server bind address |
-| `CEDROS_SERVER_PORT` | No | `8080` | Server port |
-| `CEDROS_OPENCLAW_IMAGE` | No | `ubuntu-22-04-x64` | DO droplet image |
-| `CEDROS_CONTROL_PLANE_URL` | No | `https://api.cedros.io` | Bot control-plane base URL |
-| `CEDROS_CUSTOMIZER_REPO_URL` | No | `https://github.com/janebot2026/janebot-cli.git` | Public git repo for workspace customizer |
-| `CEDROS_CUSTOMIZER_REF` | No | pinned SHA | Git ref (tag/branch/SHA) to checkout for reproducible bootstrap |
-| `CEDROS_CUSTOMIZER_WORKSPACE_DIR` | No | `/opt/openclaw/workspace` | Workspace directory on droplet |
-| `CEDROS_CUSTOMIZER_AGENT_NAME` | No | `Jane` | Agent name passed to customizer |
-| `CEDROS_CUSTOMIZER_OWNER_NAME` | No | `Cedros` | Owner name passed to customizer |
-| `CEDROS_CUSTOMIZER_SKIP_QMD` | No | `true` | Skip QMD install at droplet bootstrap |
-| `CEDROS_CUSTOMIZER_SKIP_CRON` | No | `true` | Skip OpenClaw cron install at droplet bootstrap |
-| `CEDROS_CUSTOMIZER_SKIP_GIT` | No | `true` | Skip git init at droplet bootstrap |
-| `CEDROS_CUSTOMIZER_SKIP_HEARTBEAT` | No | `true` | Skip heartbeat install at droplet bootstrap |
+| `CLAW_DATABASE_URL` | Yes | - | PostgreSQL connection string |
+| `CLAW_DIGITALOCEAN_TOKEN` | Yes | - | DigitalOcean API token |
+| `CLAW_ENCRYPTION_KEY` | Yes | - | Base64-encoded 32-byte key |
+| `CLAW_SERVER_HOST` | No | `0.0.0.0` | Server bind address |
+| `CLAW_SERVER_PORT` | No | `8080` | Server port |
+| `CLAW_OPENCLAW_IMAGE` | No | `ubuntu-22-04-x64` | DO droplet image |
+| `CLAW_CONTROL_PLANE_URL` | No | `https://api.cedros.io` | Bot control-plane base URL |
+| `CLAW_CUSTOMIZER_REPO_URL` | No | `https://github.com/janebot2026/janebot-cli.git` | Public git repo for workspace customizer |
+| `CLAW_CUSTOMIZER_REF` | No | pinned SHA | Git ref (tag/branch/SHA) to checkout for reproducible bootstrap |
+| `CLAW_CUSTOMIZER_WORKSPACE_DIR` | No | `/opt/openclaw/workspace` | Workspace directory on droplet |
+| `CLAW_CUSTOMIZER_AGENT_NAME` | No | `Jane` | Agent name passed to customizer |
+| `CLAW_CUSTOMIZER_OWNER_NAME` | No | `Cedros` | Owner name passed to customizer |
+| `CLAW_CUSTOMIZER_SKIP_QMD` | No | `true` | Skip QMD install at droplet bootstrap |
+| `CLAW_CUSTOMIZER_SKIP_CRON` | No | `true` | Skip OpenClaw cron install at droplet bootstrap |
+| `CLAW_CUSTOMIZER_SKIP_GIT` | No | `true` | Skip git init at droplet bootstrap |
+| `CLAW_CUSTOMIZER_SKIP_HEARTBEAT` | No | `true` | Skip heartbeat install at droplet bootstrap |
 
 ## 🪂 Droplet Bootstrap Notes
 
-- The droplet must be able to reach `CEDROS_CONTROL_PLANE_URL` over HTTPS.
+- The droplet must be able to reach `CLAW_CONTROL_PLANE_URL` over HTTPS.
   If you run `claw-spawn` locally, you typically need a tunnel (ngrok/cloudflared) until you have a live URL.
 - Workspace customization (janebot-cli) runs once and writes:
   - Marker: `/opt/openclaw/.customizer_ran`
@@ -327,8 +327,8 @@ make db
 
 ### "Port 8080 already in use"
 ```bash
-# Edit .env and change CEDROS_SERVER_PORT
-CEDROS_SERVER_PORT=8081 make run
+# Edit .env and change CLAW_SERVER_PORT
+CLAW_SERVER_PORT=8081 make run
 ```
 
 ## 🤝 Library Usage

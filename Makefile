@@ -25,9 +25,9 @@ help:
 	@echo "  make docker-run   - Run with Docker Compose"
 	@echo ""
 	@echo "Environment Variables Required:"
-	@echo "  CEDROS_DATABASE_URL      - PostgreSQL connection string"
-	@echo "  CEDROS_DIGITALOCEAN_TOKEN  - DigitalOcean API token"
-	@echo "  CEDROS_ENCRYPTION_KEY      - 32-byte base64 encoded key"
+	@echo "  CLAW_DATABASE_URL      - PostgreSQL connection string"
+	@echo "  CLAW_DIGITALOCEAN_TOKEN  - DigitalOcean API token"
+	@echo "  CLAW_ENCRYPTION_KEY      - 32-byte base64 encoded key"
 	@echo ""
 
 # Check all required dependencies
@@ -56,12 +56,12 @@ setup: check-deps setup-env
 setup-env:
 	@if [ ! -f .env ]; then \
 		echo "📝 Creating .env file..."; \
-		echo "CEDROS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/claw_spawn" > .env; \
-		echo "CEDROS_DIGITALOCEAN_TOKEN=your_digitalocean_api_token_here" >> .env; \
-		echo "CEDROS_ENCRYPTION_KEY=$$(openssl rand -base64 32)" >> .env; \
-		echo "CEDROS_SERVER_HOST=0.0.0.0" >> .env; \
-		echo "CEDROS_SERVER_PORT=8080" >> .env; \
-		echo "CEDROS_OPENCLAW_IMAGE=ubuntu-22-04-x64" >> .env; \
+		echo "CLAW_DATABASE_URL=postgres://postgres:postgres@localhost:5432/claw_spawn" > .env; \
+		echo "CLAW_DIGITALOCEAN_TOKEN=your_digitalocean_api_token_here" >> .env; \
+		echo "CLAW_ENCRYPTION_KEY=$$(openssl rand -base64 32)" >> .env; \
+		echo "CLAW_SERVER_HOST=0.0.0.0" >> .env; \
+		echo "CLAW_SERVER_PORT=8080" >> .env; \
+		echo "CLAW_OPENCLAW_IMAGE=ubuntu-22-04-x64" >> .env; \
 		echo "✅ Created .env with default values"; \
 		echo "⚠️  IMPORTANT: Edit .env and add your DigitalOcean token!"; \
 	else \
@@ -71,13 +71,13 @@ setup-env:
 # Create database if it doesn't exist
 db:
 	@echo "🗄️  Setting up database..."
-	@if [ -z "$$CEDROS_DATABASE_URL" ]; then \
-		echo "❌ CEDROS_DATABASE_URL not set. Run: make setup-env"; \
+	@if [ -z "$$CLAW_DATABASE_URL" ]; then \
+		echo "❌ CLAW_DATABASE_URL not set. Run: make setup-env"; \
 		exit 1; \
 	fi
-	@DB_NAME=$$(echo "$$CEDROS_DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p'); \
-	DB_HOST=$$(echo "$$CEDROS_DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p'); \
-	DB_USER=$$(echo "$$CEDROS_DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p'); \
+	@DB_NAME=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p'); \
+	DB_HOST=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p'); \
+	DB_USER=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p'); \
 	psql -h $$DB_HOST -U $$DB_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '$$DB_NAME'" | grep -q 1 || \
 		psql -h $$DB_HOST -U $$DB_USER -d postgres -c "CREATE DATABASE $$DB_NAME;" && \
 		echo "✅ Database created: $$DB_NAME" || \
@@ -86,8 +86,8 @@ db:
 # Run database migrations
 migrate:
 	@echo "🔄 Running migrations..."
-	@if [ -z "$$CEDROS_DATABASE_URL" ]; then \
-		echo "❌ CEDROS_DATABASE_URL not set. Loading from .env..."; \
+	@if [ -z "$$CLAW_DATABASE_URL" ]; then \
+		echo "❌ CLAW_DATABASE_URL not set. Loading from .env..."; \
 		export $$(grep -v '^#' .env | xargs) && cargo sqlx migrate run; \
 	else \
 		cargo sqlx migrate run; \
@@ -110,7 +110,7 @@ dev-build:
 # Start the server
 run:
 	@echo "🚀 Starting server..."
-	@if [ -z "$$CEDROS_DATABASE_URL" ]; then \
+	@if [ -z "$$CLAW_DATABASE_URL" ]; then \
 		echo "📋 Loading environment from .env..."; \
 		export $$(grep -v '^#' .env | xargs) && ./target/release/claw-spawn-server; \
 	else \
@@ -122,11 +122,12 @@ dev: check-deps dev-build
 	@echo "🚀 Starting server in dev mode..."
 	@echo "   (Use Ctrl+C to stop)"
 	@echo ""
-	@if [ -z "$$CEDROS_DATABASE_URL" ]; then \
+	@if [ -z "$$CLAW_DATABASE_URL" ]; then \
 		export $$(grep -v '^#' .env | xargs) && cargo run --bin claw-spawn-server; \
 	else \
 		cargo run --bin claw-spawn-server; \
 	fi
+
 
 # Run all tests
 test:
@@ -163,10 +164,10 @@ clean:
 reset: clean
 	@echo "⚠️  This will delete the database and all data!"
 	@read -p "Are you sure? [y/N] " confirm && [ $$confirm = "y" ] || exit 1
-	@if [ -z "$$CEDROS_DATABASE_URL" ]; then export $$(grep -v '^#' .env | xargs); fi; \
-	DB_NAME=$$(echo "$$CEDROS_DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p'); \
-	DB_HOST=$$(echo "$$CEDROS_DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p'); \
-	DB_USER=$$(echo "$$CEDROS_DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p'); \
+	@if [ -z "$$CLAW_DATABASE_URL" ]; then export $$(grep -v '^#' .env | xargs); fi; \
+	DB_NAME=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p'); \
+	DB_HOST=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p'); \
+	DB_USER=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p'); \
 	psql -h $$DB_HOST -U $$DB_USER -d postgres -c "DROP DATABASE IF EXISTS $$DB_NAME;" && \
 	echo "✅ Database dropped"
 
@@ -215,15 +216,15 @@ generate-key:
 	@echo "🔑 New encryption key:"
 	@openssl rand -base64 32
 	@echo ""
-	@echo "Add this to your .env file as CEDROS_ENCRYPTION_KEY"
+	@echo "Add this to your .env file as CLAW_ENCRYPTION_KEY"
 
 # Show current environment
 env:
 	@echo "📋 Current Environment:"
 	@echo "======================"
-	@echo "CEDROS_DATABASE_URL:      $${CEDROS_DATABASE_URL:-<not set>}"
-	@echo "CEDROS_SERVER_HOST:       $${CEDROS_SERVER_HOST:-<not set>}"
-	@echo "CEDROS_SERVER_PORT:       $${CEDROS_SERVER_PORT:-<not set>}"
-	@echo "CEDROS_OPENCLAW_IMAGE:    $${CEDROS_OPENCLAW_IMAGE:-<not set>}"
-	@echo "CEDROS_DIGITALOCEAN_TOKEN: $${CEDROS_DIGITALOCEAN_TOKEN:+<set>}"
-	@echo "CEDROS_ENCRYPTION_KEY:     $${CEDROS_ENCRYPTION_KEY:+<set>}"
+	@echo "CLAW_DATABASE_URL:      $${CLAW_DATABASE_URL:-<not set>}"
+	@echo "CLAW_SERVER_HOST:       $${CLAW_SERVER_HOST:-<not set>}"
+	@echo "CLAW_SERVER_PORT:       $${CLAW_SERVER_PORT:-<not set>}"
+	@echo "CLAW_OPENCLAW_IMAGE:    $${CLAW_OPENCLAW_IMAGE:-<not set>}"
+	@echo "CLAW_DIGITALOCEAN_TOKEN: $${CLAW_DIGITALOCEAN_TOKEN:+<set>}"
+	@echo "CLAW_ENCRYPTION_KEY:     $${CLAW_ENCRYPTION_KEY:+<set>}"

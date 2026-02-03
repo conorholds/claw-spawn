@@ -28,7 +28,7 @@ impl AppConfig {
         let config = Config::builder()
             .add_source(File::with_name("config/default").required(false))
             .add_source(File::with_name("config/local").required(false))
-            .add_source(Environment::with_prefix("CEDROS").separator("_"))
+            .add_source(Environment::with_prefix("CLAW").separator("_"))
             .set_default("server_host", "0.0.0.0")?
             .set_default("server_port", 8080)?
             .set_default("openclaw_image", "ubuntu-22-04-x64")?
