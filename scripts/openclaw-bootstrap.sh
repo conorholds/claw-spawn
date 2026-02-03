@@ -111,15 +111,26 @@ REGISTRATION_TOKEN="${REGISTRATION_TOKEN}"
 
 # Function to fetch latest config
 fetch_config() {
-    curl -s -H "Authorization: Bearer $REGISTRATION_TOKEN" \
-        "$CONTROL_PLANE_URL/bot/$BOT_ID/config" > /tmp/latest_config.json
-    
-    if [ -s /tmp/latest_config.json ]; then
-        cp /tmp/latest_config.json config.json
-        echo "Updated configuration at $(date)"
-        return 0
+    local tmp_config="/tmp/latest_config.json"
+    local http_code
+    http_code=$(curl -s -o "$tmp_config" -w "%{http_code}" \
+        -H "Authorization: Bearer $REGISTRATION_TOKEN" \
+        "$CONTROL_PLANE_URL/bot/$BOT_ID/config" 2>/dev/null || echo "000")
+
+    if [ "$http_code" != "200" ]; then
+        echo "Config fetch failed with HTTP $http_code at $(date)"
+        return 1
     fi
-    return 1
+
+    # Only update config when response is valid JSON
+    if ! jq -e . "$tmp_config" >/dev/null 2>&1; then
+        echo "Config fetch returned invalid JSON at $(date)"
+        return 1
+    fi
+
+    cp "$tmp_config" config.json
+    echo "Updated configuration at $(date)"
+    return 0
 }
 
 # Function to send heartbeat

@@ -127,12 +127,14 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Un-ignored and committed `Cargo.lock`; verified via `cargo build`
 
-- [ ] F-013 Harden bootstrap config fetch: require 200 + valid JSON before overwriting
+- [x] F-013 Harden bootstrap config fetch: require 200 + valid JSON before overwriting
   - Files: `scripts/openclaw-bootstrap.sh`
   - Planned fix:
     - Check HTTP status code; only write `config.json` when response is 200 and `jq` parses
   - Test plan:
     - (Manual) simulate non-200; ensure config not overwritten
+  - Completed:
+    - Updated `fetch_config` to require HTTP 200 and valid JSON before overwriting config; verified via `cargo test`
 
 ## Low
 
