@@ -90,13 +90,15 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Added `migrations/007_idx_bots_status_heartbeat.sql`; verified via `cargo test`
 
-- [ ] F-009 Add DB index for latest config-by-version query
+- [x] F-009 Add DB index for latest config-by-version query
   - Files: `migrations/*` (new migration)
   - Planned fix:
     - Add index on `bot_configs(bot_id, version DESC)`
   - Test plan:
     - `cargo test`
     - (Manual) `EXPLAIN ANALYZE` latest config query
+  - Completed:
+    - No new index needed: `migrations/001_init.sql` defines `UNIQUE(bot_id, version)`, which creates a btree index usable for `ORDER BY version DESC LIMIT 1` via backward index scan; verified via schema review
 
 - [ ] F-010 Remove stored DigitalOcean API token from client struct
   - Files: `src/infrastructure/digital_ocean.rs`
