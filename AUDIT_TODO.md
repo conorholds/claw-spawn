@@ -4,7 +4,7 @@
 
 ## CRITICAL SEVERITY
 
-### [ ] CRIT-001: Authentication Bypass - Registration Tokens Not Validated
+### [x] CRIT-001: Authentication Bypass - Registration Tokens Not Validated
 - **File:** `src/main.rs:400-433`
 - **Issue:** Bot registration tokens are parsed but never validated against stored tokens
 - **Fix:**
@@ -16,7 +16,8 @@
   - Try register with wrong token → expect 401
   - Try register with correct token → expect 200
   - Try register without token → expect 401
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Implemented registration token validation. Token is generated and stored when bot is spawned. register_bot handler now validates token against database using get_by_id_with_token(). Returns 401 for invalid/missing tokens. Migration 002_add_registration_token.sql adds the column.
 
 ### [ ] CRIT-002: Race Condition - Account Limit Check Not Atomic
 - **File:** `src/application/provisioning.rs:74-91`
@@ -74,17 +75,19 @@
   - Verify error is returned to caller
 - **Status:** Pending
 
-### [ ] CRIT-006: Hardcoded Control Plane URL
+### [x] CRIT-006: Hardcoded Control Plane URL
 - **File:** `src/application/provisioning.rs:202`
 - **Issue:** Control plane URL hardcoded to "https://api.cedros.io"
 - **Fix:**
-  - Use `self.openclaw_bootstrap_url` which is already passed to service
-  - Or add control_plane_url to config
+  - Added `control_plane_url` field to AppConfig with default value
+  - Pass control_plane_url to ProvisioningService constructor
+  - Use `self.control_plane_url` in generate_user_data() instead of hardcoded string
 - **Test Plan:**
   - Set custom bootstrap URL in config
   - Create bot
   - Verify user_data contains custom URL
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Control plane URL is now configurable via CEDROS_CONTROL_PLANE_URL environment variable. Default remains https://api.cedros.io for backwards compatibility.
 
 ### [ ] CRIT-007: Duplicate Config Version Race Condition
 - **File:** `src/application/lifecycle.rs:82-86`
@@ -114,17 +117,20 @@
   - Verify bot status changed to Error
 - **Status:** Pending
 
-### [ ] HIGH-002: Resume Bot Doesn't Check Droplet State
+### [x] HIGH-002: Resume Bot Doesn't Check Droplet State
 - **File:** `src/application/provisioning.rs:249-262`
 - **Issue:** resume_bot() doesn't verify droplet exists before reboot
 - **Fix:**
-  - Query droplet status before reboot
-  - Return clear error if droplet not in resumable state
+  - Verify bot is in Paused state before attempting resume
+  - Query droplet status via DO API before reboot
+  - Handle different states: Off (reboot), Active (no-op), New/Destroyed (error)
+  - Return clear error messages for invalid states
 - **Test Plan:**
   - Create bot, pause it
   - Destroy droplet in DO console
   - Try resume → expect clear error
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** resume_bot() now checks droplet state before reboot. Returns clear error if droplet doesn't exist, is still being created, or bot has no droplet. Prevents errors from trying to resume orphaned bots.
 
 ### [x] HIGH-003: No Input Validation on Risk Config
 - **File:** `src/main.rs:232-237`
