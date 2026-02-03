@@ -116,19 +116,21 @@
 
 ## HIGH SEVERITY
 
-### [ ] HIGH-001: Missing Heartbeat Timeout Detection
+### [x] HIGH-001: Missing Heartbeat Timeout Detection
 - **File:** `src/application/lifecycle.rs:127-130`
 - **Issue:** Heartbeats recorded but no logic to detect stale bots
 - **Fix:**
-  - Add check_stale_bots() method
-  - Query bots with status='online' AND last_heartbeat_at < threshold
-  - Mark stale bots as Error status
+  - Added check_stale_bots() method to BotLifecycleService
+  - Added list_stale_bots() to BotRepository trait and PostgresBotRepository implementation
+  - Query bots with status='online' AND (last_heartbeat_at < threshold OR NULL)
+  - Mark stale bots as Error status with appropriate logging
 - **Test Plan:**
   - Create bot, mark as online
   - Wait 5 minutes (or mock time)
   - Run health check
   - Verify bot status changed to Error
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. Stale bot detection queries for online bots with heartbeat older than threshold. Includes NULL heartbeat handling for bots that never reported.
 
 ### [x] HIGH-002: Resume Bot Doesn't Check Droplet State
 - **File:** `src/application/provisioning.rs:249-262`
@@ -203,16 +205,19 @@
 - **Status:** Complete
 - **Completion Note:** Build successful. Safe truncation prevents panic if UUID format changes.
 
-### [ ] MED-003: Bootstrap Script Runs as Root
+### [x] MED-003: Bootstrap Script Runs as Root
 - **File:** `scripts/openclaw-bootstrap.sh:186`
 - **Issue:** Systemd service runs as root unnecessarily
 - **Fix:**
-  - Change User=root to User=openclaw
-  - Ensure proper permissions
+  - Changed User=root to User=openclaw
+  - Added Group=openclaw to service file
+  - Added chown commands to set proper ownership for /opt/openclaw directory
+  - Added touch and chown for /var/log/openclaw-bot.log
 - **Test Plan:**
   - Deploy bot
   - Verify service runs as openclaw user
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Service now runs as openclaw user. Permissions set during bootstrap ensure bot user can access working directory and log files.
 
 ### [ ] MED-004: Missing Config Version Conflict Detection
 - **File:** `src/application/lifecycle.rs:88-111`
@@ -237,16 +242,20 @@
   - Verify safe droplet name generation
 - **Status:** Pending
 
-### [ ] MED-006: Missing Encryption Key Validation
+### [x] MED-006: Missing Encryption Key Validation
 - **File:** `src/infrastructure/crypto.rs:24-41`
 - **Issue:** Key validated for length but not entropy
 - **Fix:**
-  - Add entropy check
-  - Warn on weak keys in dev mode
+  - Added validate_key_entropy() method to SecretsEncryption
+  - Checks for all-zeros, uniform values, and low entropy patterns
+  - Warns when key contains <50% unique bytes
+  - Detects dictionary words (password, secret, 123, key) in keys
+  - Uses tracing::warn for development mode visibility
 - **Test Plan:**
   - Test with weak key (e.g., all zeros)
   - Verify warning or rejection
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. Key entropy validation provides security warnings without breaking functionality. Low entropy keys log warnings but continue to work for backwards compatibility.
 
 ### [ ] MED-007: Inconsistent Status Mapping
 - **File:** `src/infrastructure/repository.rs:389-410`
