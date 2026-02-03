@@ -138,12 +138,14 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
 
 ## Low
 
-- [ ] F-014 Remove or wire `openclaw_bootstrap_url` config (currently unused)
+- [x] F-014 Remove or wire `openclaw_bootstrap_url` config (currently unused)
   - Files: `src/infrastructure/config.rs`, (maybe) `src/application/provisioning.rs`
   - Planned fix:
     - Prefer removal unless there is an intended use; keep config surface minimal
   - Test plan:
     - `cargo test`
+  - Completed:
+    - Removed unused `openclaw_bootstrap_url` from `AppConfig` and `.env.example`; verified via `cargo test`
 
 - [ ] F-015 Add minimal CI (fmt/clippy/test)
   - Files: `.github/workflows/ci.yml` (new)
