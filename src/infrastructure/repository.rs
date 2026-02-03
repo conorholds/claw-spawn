@@ -48,6 +48,11 @@ pub trait BotRepository: Send + Sync {
     async fn update_heartbeat(&self, bot_id: Uuid) -> Result<(), RepositoryError>;
     async fn update_registration_token(&self, bot_id: Uuid, token: &str) -> Result<(), RepositoryError>;
     async fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+    /// Atomically increment bot counter for account, returning (success, current_count, max_count)
+    /// CRIT-002: Prevents race conditions in account limit checking
+    async fn increment_bot_counter(&self, account_id: Uuid) -> Result<(bool, i32, i32), RepositoryError>;
+    /// Decrement bot counter when bot is destroyed
+    async fn decrement_bot_counter(&self, account_id: Uuid) -> Result<(), RepositoryError>;
 }
 
 #[async_trait]
@@ -56,6 +61,9 @@ pub trait ConfigRepository: Send + Sync {
     async fn get_by_id(&self, id: Uuid) -> Result<StoredBotConfig, RepositoryError>;
     async fn get_latest_for_bot(&self, bot_id: Uuid) -> Result<Option<StoredBotConfig>, RepositoryError>;
     async fn list_by_bot(&self, bot_id: Uuid) -> Result<Vec<StoredBotConfig>, RepositoryError>;
+    /// Get next config version atomically using advisory locks
+    /// CRIT-007: Prevents duplicate version numbers under concurrent updates
+    async fn get_next_version_atomic(&self, bot_id: Uuid) -> Result<i32, RepositoryError>;
 }
 
 #[async_trait]
@@ -423,6 +431,40 @@ impl BotRepository for PostgresBotRepository {
         .bind(id)
         .execute(&self.pool)
         .await?;
+
+        Ok(())
+    }
+
+    async fn increment_bot_counter(&self, account_id: Uuid) -> Result<(bool, i32, i32), RepositoryError> {
+        let row = sqlx::query(
+            r#"
+            SELECT success, current_count, max_count
+            FROM increment_bot_counter($1)
+            "#,
+        )
+        .bind(account_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => {
+                // Counter doesn't exist yet - query current state
+                RepositoryError::NotFound(format!("Account counter for {}", account_id))
+            }
+            _ => RepositoryError::DatabaseError(e),
+        })?;
+
+        let success: bool = row.try_get("success")?;
+        let current_count: i32 = row.try_get("current_count")?;
+        let max_count: i32 = row.try_get("max_count")?;
+
+        Ok((success, current_count, max_count))
+    }
+
+    async fn decrement_bot_counter(&self, account_id: Uuid) -> Result<(), RepositoryError> {
+        sqlx::query("SELECT decrement_bot_counter($1)")
+            .bind(account_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }

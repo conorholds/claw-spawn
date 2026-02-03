@@ -78,21 +78,37 @@ where
         persona: Persona,
         config: BotConfig,
     ) -> Result<Bot, ProvisioningError> {
-        let account = self.account_repo.get_by_id(account_id).await?;
-        let existing_bots = self.bot_repo.list_by_account(account_id).await?;
-
-        let active_count = existing_bots
-            .iter()
-            .filter(|b| b.status != BotStatus::Destroyed)
-            .count() as i32;
-
-        if active_count >= account.max_bots {
-            return Err(ProvisioningError::AccountLimitReached(account.max_bots));
+        let _account = self.account_repo.get_by_id(account_id).await?;
+        
+        // CRIT-002: Use atomic counter for race-condition-free limit checking
+        let (success, _current_count, max_count) = self.bot_repo.increment_bot_counter(account_id).await?;
+        
+        if !success {
+            return Err(ProvisioningError::AccountLimitReached(max_count));
         }
 
         let mut bot = Bot::new(account_id, name, persona);
 
-        self.bot_repo.create(&bot).await?;
+        // CRIT-005: Resource cleanup - if DB operations fail after this point,
+        // we need to decrement the counter we just incremented
+        let result = self.create_bot_internal(&mut bot, config).await;
+        
+        if result.is_err() {
+            // Decrement counter on failure to allow retry
+            if let Err(e) = self.bot_repo.decrement_bot_counter(account_id).await {
+                error!("Failed to decrement bot counter for account {}: {}", account_id, e);
+            }
+        }
+        
+        result.map(|_| bot)
+    }
+
+    async fn create_bot_internal(
+        &self,
+        bot: &mut Bot,
+        config: BotConfig,
+    ) -> Result<(), ProvisioningError> {
+        self.bot_repo.create(bot).await?;
         info!("Created bot record: {}", bot.id);
 
         let encrypted_key = self
@@ -122,9 +138,9 @@ where
             .await?;
         bot.desired_config_version_id = Some(config_with_encrypted.id);
 
-        self.spawn_bot(&mut bot, &config_with_encrypted).await?;
+        self.spawn_bot(bot, &config_with_encrypted).await?;
 
-        Ok(bot)
+        Ok(())
     }
 
     async fn spawn_bot(&self, bot: &mut Bot, config: &StoredBotConfig) -> Result<(), ProvisioningError> {
@@ -153,6 +169,7 @@ where
             tags: vec!["openclaw".to_string(), format!("bot-{}", bot.id)],
         };
 
+        // CRIT-005: Create droplet first, then attempt DB persistence with cleanup on failure
         let droplet = match self.do_client.create_droplet(droplet_request).await {
             Ok(d) => d,
             Err(DigitalOceanError::RateLimited) => {
@@ -169,11 +186,43 @@ where
             }
         };
 
-        self.droplet_repo.create(&droplet).await?;
-        self.droplet_repo
-            .update_bot_assignment(droplet.id, Some(bot.id))
-            .await?;
-        self.bot_repo.update_droplet(bot.id, Some(droplet.id)).await?;
+        // CRIT-005: Attempt DB operations with compensating cleanup on failure
+        let db_result: Result<(), ProvisioningError> = async {
+            self.droplet_repo.create(&droplet).await?;
+            self.droplet_repo
+                .update_bot_assignment(droplet.id, Some(bot.id))
+                .await?;
+            self.bot_repo.update_droplet(bot.id, Some(droplet.id)).await?;
+            Ok(())
+        }.await;
+
+        if let Err(ref e) = db_result {
+            // CRIT-005: DB persistence failed - attempt to clean up DO droplet
+            error!(
+                "DB persistence failed for bot {} after DO droplet {} created. Attempting cleanup: {}",
+                bot.id, droplet.id, e
+            );
+            
+            match self.do_client.destroy_droplet(droplet.id).await {
+                Ok(_) => {
+                    info!("Successfully cleaned up droplet {} for bot {} after DB failure", droplet.id, bot.id);
+                }
+                Err(cleanup_err) => {
+                    error!(
+                        "FAILED TO CLEANUP: Droplet {} for bot {} may be orphaned. Error: {}",
+                        droplet.id, bot.id, cleanup_err
+                    );
+                }
+            }
+            
+            // Update bot status to error since droplet creation failed at persistence stage
+            if let Err(status_err) = self.bot_repo.update_status(bot.id, BotStatus::Error).await {
+                error!("Failed to update bot {} status to error: {}", bot.id, status_err);
+            }
+            bot.status = BotStatus::Error;
+            
+            return Err(db_result.unwrap_err());
+        }
 
         bot.droplet_id = Some(droplet.id);
 
@@ -236,6 +285,11 @@ export CONTROL_PLANE_URL="{}"
 
         self.bot_repo.update_droplet(bot_id, None).await?;
         self.bot_repo.delete(bot_id).await?;
+        
+        // CRIT-002: Decrement bot counter when bot is destroyed
+        if let Err(e) = self.bot_repo.decrement_bot_counter(bot.account_id).await {
+            error!("Failed to decrement bot counter for account {}: {}", bot.account_id, e);
+        }
 
         info!("Successfully destroyed bot {}", bot_id);
         Ok(())
