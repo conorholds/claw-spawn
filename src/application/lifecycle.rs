@@ -43,6 +43,10 @@ where
         Ok(self.bot_repo.get_by_id(bot_id).await?)
     }
 
+    pub async fn get_bot_with_token(&self, bot_id: Uuid, token: &str) -> Result<Bot, LifecycleError> {
+        Ok(self.bot_repo.get_by_id_with_token(bot_id, token).await?)
+    }
+
     pub async fn list_account_bots(&self, account_id: Uuid) -> Result<Vec<Bot>, LifecycleError> {
         Ok(self.bot_repo.list_by_account(account_id).await?)
     }

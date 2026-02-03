@@ -445,11 +445,15 @@ async fn register_bot(
         );
     }
 
-    match state.lifecycle.get_bot(req.bot_id).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "registered"}))),
+    // CRIT-001: Validate registration token against stored token
+    match state.lifecycle.get_bot_with_token(req.bot_id, token).await {
+        Ok(bot) => {
+            info!("Bot {} registered successfully with valid token", bot.id);
+            (StatusCode::OK, Json(serde_json::json!({"status": "registered"})))
+        }
         Err(_) => (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "Bot not found" })),
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Invalid bot ID or registration token" })),
         ),
     }
 }

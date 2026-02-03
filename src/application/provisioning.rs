@@ -134,6 +134,10 @@ where
         let id_str = bot.id.to_string();
         let droplet_name = format!("openclaw-bot-{}", &id_str[..8.min(id_str.len())]);
         let registration_token = self.generate_registration_token(bot.id);
+        
+        // CRIT-001: Store registration token in database
+        self.bot_repo.update_registration_token(bot.id, &registration_token).await?;
+        bot.registration_token = Some(registration_token.clone());
 
         let user_data = self.generate_user_data(&registration_token, bot.id, config);
 

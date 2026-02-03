@@ -31,6 +31,7 @@ pub trait AccountRepository: Send + Sync {
 pub trait BotRepository: Send + Sync {
     async fn create(&self, bot: &Bot) -> Result<(), RepositoryError>;
     async fn get_by_id(&self, id: Uuid) -> Result<Bot, RepositoryError>;
+    async fn get_by_id_with_token(&self, id: Uuid, token: &str) -> Result<Bot, RepositoryError>;
     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError>;
     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError>;
     async fn update_droplet(
@@ -45,6 +46,7 @@ pub trait BotRepository: Send + Sync {
         applied: Option<Uuid>,
     ) -> Result<(), RepositoryError>;
     async fn update_heartbeat(&self, bot_id: Uuid) -> Result<(), RepositoryError>;
+    async fn update_registration_token(&self, bot_id: Uuid, token: &str) -> Result<(), RepositoryError>;
     async fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
 }
 
@@ -229,8 +231,8 @@ impl BotRepository for PostgresBotRepository {
             r#"
             INSERT INTO bots (id, account_id, name, persona, status, droplet_id, 
                              desired_config_version_id, applied_config_version_id, 
-                             created_at, updated_at, last_heartbeat_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                             registration_token, created_at, updated_at, last_heartbeat_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             "#,
         )
         .bind(bot.id)
@@ -241,6 +243,7 @@ impl BotRepository for PostgresBotRepository {
         .bind(bot.droplet_id)
         .bind(bot.desired_config_version_id)
         .bind(bot.applied_config_version_id)
+        .bind(&bot.registration_token)
         .bind(bot.created_at)
         .bind(bot.updated_at)
         .bind(bot.last_heartbeat_at)
@@ -255,7 +258,7 @@ impl BotRepository for PostgresBotRepository {
             r#"
             SELECT id, account_id, name, persona, status, droplet_id,
                    desired_config_version_id, applied_config_version_id,
-                   created_at, updated_at, last_heartbeat_at
+                   registration_token, created_at, updated_at, last_heartbeat_at
             FROM bots
             WHERE id = $1
             "#,
@@ -271,12 +274,34 @@ impl BotRepository for PostgresBotRepository {
         Ok(row_to_bot(&row)?)
     }
 
+    async fn get_by_id_with_token(&self, id: Uuid, token: &str) -> Result<Bot, RepositoryError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, account_id, name, persona, status, droplet_id,
+                   desired_config_version_id, applied_config_version_id,
+                   registration_token, created_at, updated_at, last_heartbeat_at
+            FROM bots
+            WHERE id = $1 AND registration_token = $2
+            "#,
+        )
+        .bind(id)
+        .bind(token)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => RepositoryError::NotFound(format!("Bot {} with invalid token", id)),
+            _ => RepositoryError::DatabaseError(e),
+        })?;
+
+        Ok(row_to_bot(&row)?)
+    }
+
     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError> {
         let rows = sqlx::query(
             r#"
             SELECT id, account_id, name, persona, status, droplet_id,
                    desired_config_version_id, applied_config_version_id,
-                   created_at, updated_at, last_heartbeat_at
+                   registration_token, created_at, updated_at, last_heartbeat_at
             FROM bots
             WHERE account_id = $1
             ORDER BY created_at DESC
@@ -369,6 +394,23 @@ impl BotRepository for PostgresBotRepository {
         Ok(())
     }
 
+    async fn update_registration_token(&self, bot_id: Uuid, token: &str) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            UPDATE bots
+            SET registration_token = $1, updated_at = $2
+            WHERE id = $3
+            "#,
+        )
+        .bind(token)
+        .bind(Utc::now())
+        .bind(bot_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     async fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
         sqlx::query(
             r#"
@@ -439,6 +481,7 @@ fn row_to_bot(row: &sqlx::postgres::PgRow) -> Result<Bot, RepositoryError> {
         droplet_id: row.try_get("droplet_id")?,
         desired_config_version_id: row.try_get("desired_config_version_id")?,
         applied_config_version_id: row.try_get("applied_config_version_id")?,
+        registration_token: row.try_get("registration_token")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
         last_heartbeat_at: row.try_get("last_heartbeat_at")?,
