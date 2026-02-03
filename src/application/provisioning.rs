@@ -256,15 +256,53 @@ export CONTROL_PLANE_URL="{}"
     pub async fn resume_bot(&self, bot_id: Uuid) -> Result<(), ProvisioningError> {
         let bot = self.bot_repo.get_by_id(bot_id).await?;
 
-        if bot.status == BotStatus::Paused {
-            if let Some(droplet_id) = bot.droplet_id {
-                self.do_client.reboot_droplet(droplet_id).await?;
-                info!("Resumed droplet {} for bot {}", droplet_id, bot_id);
-            }
-
-            self.bot_repo.update_status(bot_id, BotStatus::Online).await?;
+        if bot.status != BotStatus::Paused {
+            return Err(ProvisioningError::InvalidConfig(
+                format!("Bot {} is not in paused state (current: {:?})", bot_id, bot.status)
+            ));
         }
 
+        if let Some(droplet_id) = bot.droplet_id {
+            // HIGH-002: Check droplet status before attempting reboot
+            match self.do_client.get_droplet(droplet_id).await {
+                Ok(droplet) => {
+                    match droplet.status {
+                        crate::domain::DropletStatus::Off => {
+                            // Droplet is off, safe to reboot
+                            self.do_client.reboot_droplet(droplet_id).await?;
+                            info!("Resumed droplet {} for bot {}", droplet_id, bot_id);
+                        }
+                        crate::domain::DropletStatus::Active => {
+                            // Droplet is already running, just update status
+                            info!("Droplet {} for bot {} is already active", droplet_id, bot_id);
+                        }
+                        crate::domain::DropletStatus::New => {
+                            // Droplet is still being created, not ready
+                            return Err(ProvisioningError::InvalidConfig(
+                                format!("Droplet {} is still being created, cannot resume yet", droplet_id)
+                            ));
+                        }
+                        _ => {
+                            return Err(ProvisioningError::InvalidConfig(
+                                format!("Droplet {} is in state {:?}, cannot resume", droplet_id, droplet.status)
+                            ));
+                        }
+                    }
+                }
+                Err(DigitalOceanError::NotFound(_)) => {
+                    return Err(ProvisioningError::InvalidConfig(
+                        format!("Droplet {} for bot {} no longer exists in DigitalOcean", droplet_id, bot_id)
+                    ));
+                }
+                Err(e) => return Err(e.into()),
+            }
+        } else {
+            return Err(ProvisioningError::InvalidConfig(
+                format!("Bot {} has no associated droplet", bot_id)
+            ));
+        }
+
+        self.bot_repo.update_status(bot_id, BotStatus::Online).await?;
         Ok(())
     }
 
