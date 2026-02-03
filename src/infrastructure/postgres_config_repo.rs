@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use claw_spawn::domain::{EncryptedBotSecrets, RiskConfig, StoredBotConfig, TradingConfig};
-use claw_spawn::infrastructure::{ConfigRepository, RepositoryError};
+use crate::domain::{EncryptedBotSecrets, RiskConfig, StoredBotConfig, TradingConfig};
+use crate::infrastructure::{ConfigRepository, RepositoryError};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 

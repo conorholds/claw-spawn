@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use claw_spawn::domain::{Droplet, DropletStatus};
-use claw_spawn::infrastructure::{DropletRepository, RepositoryError};
+use crate::domain::{Droplet, DropletStatus};
+use crate::infrastructure::{DropletRepository, RepositoryError};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 

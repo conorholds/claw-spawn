@@ -13,7 +13,8 @@ use claw_spawn::{
     },
     infrastructure::{
         AccountRepository, AppConfig, DigitalOceanClient, DigitalOceanError,
-        PostgresAccountRepository, PostgresBotRepository, SecretsEncryption,
+        PostgresAccountRepository, PostgresBotRepository, PostgresConfigRepository,
+        PostgresDropletRepository, SecretsEncryption,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -23,12 +24,6 @@ use tracing::{error, info};
 use utoipa::{IntoParams, OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
 use uuid::Uuid;
-
-mod config_repo;
-mod droplet_repo;
-
-use config_repo::PostgresConfigRepository;
-use droplet_repo::PostgresDropletRepository;
 
 fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
     headers
