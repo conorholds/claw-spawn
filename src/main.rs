@@ -8,7 +8,7 @@ use axum::{
 use cedros_open_spawn::{
     application::{BotLifecycleService, ProvisioningError, ProvisioningService},
     domain::{
-        Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, BotStatus, Persona,
+        Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona,
         RiskConfig, SignalKnobs, StrictnessLevel, TradingConfig,
     },
     infrastructure::{

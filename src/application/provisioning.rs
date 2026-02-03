@@ -8,7 +8,7 @@ use crate::infrastructure::{
 use rand::RngCore;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{error, info, warn, Span};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// MED-005: Maximum length for sanitized bot names
@@ -114,7 +114,9 @@ where
             return Err(ProvisioningError::AccountLimitReached(max_count));
         }
 
-        let mut bot = Bot::new(account_id, name, persona);
+        // MED-005: Sanitize bot name before use
+        let sanitized_name = sanitize_bot_name(&name);
+        let mut bot = Bot::new(account_id, sanitized_name, persona);
 
         // CRIT-005: Resource cleanup - if DB operations fail after this point,
         // we need to decrement the counter we just incremented

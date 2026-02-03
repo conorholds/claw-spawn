@@ -259,16 +259,19 @@
 - **Status:** Complete
 - **Completion Note:** Build successful. Key entropy validation provides security warnings without breaking functionality. Low entropy keys log warnings but continue to work for backwards compatibility.
 
-### [ ] MED-007: Inconsistent Status Mapping
-- **File:** `src/infrastructure/repository.rs:389-410`
-- **Issue:** Status mapping functions are verbose and error-prone
-- **Fix:**
-  - Use strum derive macros
-  - Or create unified mapping macro
-- **Test Plan:**
-  - All status conversions work correctly
-  - No regressions
-- **Status:** Pending
+### [x] MED-007: Inconsistent Status Mapping
+   - **File:** `src/infrastructure/repository.rs:389-410`
+   - **Issue:** Status mapping functions are verbose and error-prone
+   - **Fix:**
+   - Added strum dependency to Cargo.toml
+   - Added Display and EnumString derives to BotStatus and Persona enums
+   - Replaced manual match statements with to_string() and from_str()
+   - Removed bot_status_to_string, string_to_bot_status, persona_to_string, string_to_persona functions
+   - **Test Plan:**
+   - All status conversions work correctly
+   - No regressions
+   - **Status:** Complete
+   - **Completion Note:** Build successful with strum integration. All manual status mapping functions removed. Enums now automatically serialize/deserialize with snake_case format.
 
 ## PERFORMANCE ISSUES
 
