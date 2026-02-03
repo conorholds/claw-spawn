@@ -34,8 +34,6 @@ fn is_retryable_status(status: u16) -> bool {
 
 pub struct DigitalOceanClient {
     client: Client,
-    #[allow(dead_code)]
-    api_token: String,
     base_url: String,
 }
 
@@ -68,7 +66,6 @@ impl DigitalOceanClient {
 
         Ok(Self {
             client,
-            api_token,
             base_url: "https://api.digitalocean.com/v2".to_string(),
         })
     }

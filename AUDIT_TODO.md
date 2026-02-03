@@ -100,12 +100,14 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - No new index needed: `migrations/001_init.sql` defines `UNIQUE(bot_id, version)`, which creates a btree index usable for `ORDER BY version DESC LIMIT 1` via backward index scan; verified via schema review
 
-- [ ] F-010 Remove stored DigitalOcean API token from client struct
+- [x] F-010 Remove stored DigitalOcean API token from client struct
   - Files: `src/infrastructure/digital_ocean.rs`
   - Planned fix:
     - Remove `api_token` field (avoid accidental logging)
   - Test plan:
     - `cargo test`
+  - Completed:
+    - Removed stored token field from `DigitalOceanClient`; verified via `cargo test`
 
 - [ ] F-011 Remove/ignore assistant tool metadata from runtime repo
   - Files: `.claude/**`, `.gemini/**`, `.opencode/**`, `.mcp.json`, `.gitignore`
