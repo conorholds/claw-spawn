@@ -432,7 +432,7 @@ async fn list_bots(
     Query(params): Query<PaginationParams>,
 ) -> impl IntoResponse {
     // PERF-002: Clamp limit to max value to prevent abuse
-    let limit = params.limit.min(MAX_PAGINATION_LIMIT).max(1);
+    let limit = params.limit.clamp(1, MAX_PAGINATION_LIMIT);
     let offset = params.offset.max(0);
 
     match state

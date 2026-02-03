@@ -27,23 +27,12 @@ where
     Fut: std::future::Future<Output = Result<T, E>>,
     E: std::fmt::Display,
 {
-    for attempt in 0..RETRY_ATTEMPTS {
+    // Retry with delays between attempts; final attempt has no delay.
+    for (attempt, delay_ms) in RETRY_DELAYS_MS.iter().enumerate() {
         match f().await {
             Ok(result) => return Ok(result),
             Err(e) => {
                 let attempt_num = attempt + 1;
-                if attempt_num >= RETRY_ATTEMPTS {
-                    error!(
-                        bot_id = %bot_id,
-                        operation = %operation_name,
-                        attempts = RETRY_ATTEMPTS,
-                        error = %e,
-                        "All retry attempts exhausted"
-                    );
-                    return Err(e);
-                }
-
-                let delay_ms = RETRY_DELAYS_MS[attempt];
                 warn!(
                     bot_id = %bot_id,
                     operation = %operation_name,
@@ -53,12 +42,24 @@ where
                     "Operation failed, will retry after {}ms",
                     delay_ms
                 );
-                sleep(Duration::from_millis(delay_ms)).await;
+                sleep(Duration::from_millis(*delay_ms)).await;
             }
         }
     }
 
-    unreachable!("retry loop returns on success or final failure")
+    match f().await {
+        Ok(result) => Ok(result),
+        Err(e) => {
+            error!(
+                bot_id = %bot_id,
+                operation = %operation_name,
+                attempts = RETRY_ATTEMPTS,
+                error = %e,
+                "All retry attempts exhausted"
+            );
+            Err(e)
+        }
+    }
 }
 
 /// MED-005: Sanitize user-provided bot name to prevent injection/truncation issues
@@ -358,6 +359,7 @@ where
     C: ConfigRepository,
     D: DropletRepository,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         do_client: Arc<DigitalOceanClient>,
         account_repo: Arc<A>,
@@ -675,7 +677,7 @@ export CONTROL_PLANE_URL="{}"
     fn generate_registration_token(&self, _bot_id: Uuid) -> String {
         let mut token = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut token);
-        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &token)
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, token)
     }
 
     pub async fn destroy_bot(&self, bot_id: Uuid) -> Result<(), ProvisioningError> {

@@ -72,6 +72,17 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Applied rustfmt; verified via `cargo fmt --check` and `cargo test`
 
+- [x] F-016 Fix clippy warnings to enable `cargo clippy -- -D warnings`
+  - Files: `src/application/provisioning.rs`
+  - Planned fix:
+    - Refactor retry loop to avoid `needless_range_loop` while keeping exact attempt count
+    - Address clippy warnings (`too_many_arguments`, needless borrow)
+  - Test plan:
+    - `cargo clippy -- -D warnings`
+    - `cargo test`
+  - Completed:
+    - Fixed clippy findings (retry loop structure, manual clamp, needless borrow) and added allow for `too_many_arguments`; verified via `cargo clippy -- -D warnings` and `cargo test`
+
 - [x] F-007 Add DB index for account bot pagination ordering
   - Files: `migrations/*` (new migration)
   - Planned fix:
