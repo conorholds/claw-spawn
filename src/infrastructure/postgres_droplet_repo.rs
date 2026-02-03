@@ -1,6 +1,6 @@
-use async_trait::async_trait;
 use crate::domain::{Droplet, DropletStatus};
 use crate::infrastructure::{DropletRepository, RepositoryError};
+use async_trait::async_trait;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 

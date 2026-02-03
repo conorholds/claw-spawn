@@ -1,6 +1,6 @@
-use async_trait::async_trait;
 use crate::domain::{EncryptedBotSecrets, RiskConfig, StoredBotConfig, TradingConfig};
 use crate::infrastructure::{ConfigRepository, RepositoryError};
+use async_trait::async_trait;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 

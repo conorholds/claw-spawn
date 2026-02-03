@@ -4,11 +4,11 @@
 //! - **Standalone**: `claw-spawn-server` binary calls `run()`
 //! - **Embedded**: host Axum app calls `router(state)` (and may nest it)
 
-mod state;
 mod http;
+mod state;
 
-pub use state::{build_state_from_env, build_state_with_pool, AppState};
 pub use http::router;
+pub use state::{build_state_from_env, build_state_with_pool, AppState};
 
 use crate::infrastructure::AppConfig;
 use anyhow::Context;

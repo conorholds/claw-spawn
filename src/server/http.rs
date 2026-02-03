@@ -1,8 +1,8 @@
 use super::state::AppState;
 use crate::application::ProvisioningError;
 use crate::domain::{
-    Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona, RiskConfig, SignalKnobs,
-    StrictnessLevel, TradingConfig,
+    Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona, RiskConfig,
+    SignalKnobs, StrictnessLevel, TradingConfig,
 };
 use crate::infrastructure::{AccountRepository, DigitalOceanError};
 use axum::{
@@ -96,7 +96,10 @@ mod tests {
     #[test]
     fn extract_bearer_token_happy_path() {
         let mut headers = HeaderMap::new();
-        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Bearer abc123"));
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer abc123"),
+        );
         assert_eq!(extract_bearer_token(&headers), Some("abc123"));
     }
 
@@ -113,7 +116,10 @@ mod tests {
     #[test]
     fn extract_bearer_token_rejects_wrong_scheme() {
         let mut headers = HeaderMap::new();
-        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Basic abc123"));
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Basic abc123"),
+        );
         assert_eq!(extract_bearer_token(&headers), None);
     }
 
@@ -233,7 +239,10 @@ struct CreateAccountRequest {
         (status = 500, description = "Failed to create account", body = Object)
     )
 )]
-async fn create_account(State(state): State<AppState>, Json(req): Json<CreateAccountRequest>) -> impl IntoResponse {
+async fn create_account(
+    State(state): State<AppState>,
+    Json(req): Json<CreateAccountRequest>,
+) -> impl IntoResponse {
     let tier = match parse_subscription_tier(req.tier.as_str()) {
         Some(t) => t,
         None => {
@@ -256,7 +265,10 @@ async fn create_account(State(state): State<AppState>, Json(req): Json<CreateAcc
         );
     }
 
-    (StatusCode::CREATED, Json(serde_json::json!({"id": account.id})))
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({"id": account.id})),
+    )
 }
 
 #[utoipa::path(
@@ -304,7 +316,11 @@ async fn list_bots(
     let limit = params.limit.clamp(1, MAX_PAGINATION_LIMIT);
     let offset = params.offset.max(0);
 
-    match state.lifecycle.list_account_bots(account_id, limit, offset).await {
+    match state
+        .lifecycle
+        .list_account_bots(account_id, limit, offset)
+        .await
+    {
         Ok(bots) => {
             let bot_responses: Vec<BotResponse> = bots.into_iter().map(Into::into).collect();
             (StatusCode::OK, Json(serde_json::json!(bot_responses)))
@@ -349,7 +365,10 @@ struct CreateBotRequest {
         (status = 500, description = "Failed to create bot", body = Object)
     )
 )]
-async fn create_bot(State(state): State<AppState>, Json(req): Json<CreateBotRequest>) -> impl IntoResponse {
+async fn create_bot(
+    State(state): State<AppState>,
+    Json(req): Json<CreateBotRequest>,
+) -> impl IntoResponse {
     let persona = match parse_persona(req.persona.as_str()) {
         Some(p) => p,
         None => {
@@ -452,7 +471,10 @@ async fn create_bot(State(state): State<AppState>, Json(req): Json<CreateBotRequ
         .create_bot(req.account_id, req.name, persona, config)
         .await
     {
-        Ok(bot) => (StatusCode::CREATED, Json(serde_json::json!(BotResponse::from(bot)))),
+        Ok(bot) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!(BotResponse::from(bot))),
+        ),
         Err(ProvisioningError::AccountLimitReached(max)) => (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({
@@ -485,8 +507,14 @@ async fn create_bot(State(state): State<AppState>, Json(req): Json<CreateBotRequ
 )]
 async fn get_bot(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
     match state.lifecycle.get_bot(id).await {
-        Ok(bot) => (StatusCode::OK, Json(serde_json::json!(BotResponse::from(bot)))),
-        Err(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Bot not found"}))),
+        Ok(bot) => (
+            StatusCode::OK,
+            Json(serde_json::json!(BotResponse::from(bot))),
+        ),
+        Err(_) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Bot not found"})),
+        ),
     }
 }
 
@@ -504,7 +532,10 @@ async fn get_bot(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl In
 async fn get_bot_config(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
     match state.lifecycle.get_desired_config(id).await {
         Ok(Some(config)) => (StatusCode::OK, Json(serde_json::json!(config))),
-        Ok(None) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "No config found"}))),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "No config found"})),
+        ),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": "Failed to get config"})),
@@ -539,7 +570,9 @@ async fn bot_action(
         "resume" => state.provisioning.resume_bot(id).await,
         "redeploy" => state.provisioning.redeploy_bot(id).await,
         "destroy" => state.provisioning.destroy_bot(id).await,
-        _ => Err(ProvisioningError::InvalidConfig("Unknown action".to_string())),
+        _ => Err(ProvisioningError::InvalidConfig(
+            "Unknown action".to_string(),
+        )),
     };
 
     match result {
@@ -587,7 +620,10 @@ async fn register_bot(
     match state.lifecycle.get_bot_with_token(req.bot_id, token).await {
         Ok(bot) => {
             info!(bot_id = %bot.id, "Bot registered successfully");
-            (StatusCode::OK, Json(serde_json::json!({"status": "registered"})))
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"status": "registered"})),
+            )
         }
         Err(_) => (
             StatusCode::UNAUTHORIZED,

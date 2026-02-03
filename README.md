@@ -101,6 +101,27 @@ The Docker setup includes:
 | `CEDROS_SERVER_PORT` | No | `8080` | Server port |
 | `CEDROS_OPENCLAW_IMAGE` | No | `ubuntu-22-04-x64` | DO droplet image |
 
+## 🧩 Embedded Usage (Integrate Into Larger Axum Server)
+
+`claw-spawn` supports a dual architecture:
+- Standalone microservice via the `claw-spawn-server` binary
+- Embedded router via `claw_spawn::server::router(...)`
+
+Example (host app nests this service under `/spawn`):
+
+```rust,ignore
+use axum::Router;
+use claw_spawn::infrastructure::AppConfig;
+use claw_spawn::server::{build_state_with_pool, router};
+use sqlx::PgPool;
+
+let cfg = AppConfig::from_env()?;
+let pool = PgPool::connect(&cfg.database_url).await?;
+let state = build_state_with_pool(cfg, pool, /* run_migrations */ true).await?;
+
+let app = Router::new().nest("/spawn", router(state));
+```
+
 ## 🎯 API Usage Examples
 
 ### Create a Bot

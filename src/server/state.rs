@@ -14,7 +14,8 @@ pub type ProvisioningServiceType = ProvisioningService<
     PostgresDropletRepository,
 >;
 
-pub type BotLifecycleServiceType = BotLifecycleService<PostgresBotRepository, PostgresConfigRepository>;
+pub type BotLifecycleServiceType =
+    BotLifecycleService<PostgresBotRepository, PostgresConfigRepository>;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -39,9 +40,8 @@ pub async fn build_state_with_pool(
             .context("run migrations")?;
     }
 
-    let encryption = Arc::new(
-        SecretsEncryption::new(&config.encryption_key).context("init encryption")?,
-    );
+    let encryption =
+        Arc::new(SecretsEncryption::new(&config.encryption_key).context("init encryption")?);
 
     let do_client = Arc::new(
         DigitalOceanClient::new(config.digitalocean_token).context("init DigitalOcean client")?,
@@ -63,7 +63,10 @@ pub async fn build_state_with_pool(
         config.control_plane_url,
     ));
 
-    let lifecycle = Arc::new(BotLifecycleService::new(bot_repo.clone(), config_repo.clone()));
+    let lifecycle = Arc::new(BotLifecycleService::new(
+        bot_repo.clone(),
+        config_repo.clone(),
+    ));
 
     Ok(AppState {
         pool,
