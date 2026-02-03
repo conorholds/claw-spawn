@@ -1,8 +1,9 @@
 use crate::domain::{Bot, BotStatus, StoredBotConfig};
 use crate::infrastructure::{BotRepository, ConfigRepository, RepositoryError};
+use chrono::{Duration, Utc};
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 #[derive(Error, Debug)]
@@ -128,5 +129,31 @@ where
     pub async fn record_heartbeat(&self, bot_id: Uuid) -> Result<(), LifecycleError> {
         self.bot_repo.update_heartbeat(bot_id).await?;
         Ok(())
+    }
+
+    /// Check for bots with stale heartbeats and mark them as Error (HIGH-001)
+    pub async fn check_stale_bots(
+        &self,
+        heartbeat_timeout: Duration,
+    ) -> Result<Vec<Bot>, LifecycleError> {
+        let threshold = Utc::now() - heartbeat_timeout;
+        let stale_bots = self.bot_repo.list_stale_bots(threshold).await?;
+
+        for bot in &stale_bots {
+            warn!(
+                "Bot {} heartbeat timeout (last: {:?}), marking as Error",
+                bot.id, bot.last_heartbeat_at
+            );
+            self.bot_repo.update_status(bot.id, BotStatus::Error).await?;
+        }
+
+        if !stale_bots.is_empty() {
+            info!(
+                "Marked {} bot(s) as Error due to heartbeat timeout",
+                stale_bots.len()
+            );
+        }
+
+        Ok(stale_bots)
     }
 }

@@ -53,6 +53,11 @@ pub trait BotRepository: Send + Sync {
     async fn increment_bot_counter(&self, account_id: Uuid) -> Result<(bool, i32, i32), RepositoryError>;
     /// Decrement bot counter when bot is destroyed
     async fn decrement_bot_counter(&self, account_id: Uuid) -> Result<(), RepositoryError>;
+    /// List bots with stale heartbeats (HIGH-001)
+    async fn list_stale_bots(
+        &self,
+        threshold: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<Bot>, RepositoryError>;
 }
 
 #[async_trait]
@@ -467,6 +472,27 @@ impl BotRepository for PostgresBotRepository {
             .await?;
 
         Ok(())
+    }
+
+    async fn list_stale_bots(
+        &self,
+        threshold: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<Bot>, RepositoryError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, account_id, name, persona, status, droplet_id,
+                   desired_config_version_id, applied_config_version_id,
+                   registration_token, created_at, updated_at, last_heartbeat_at
+            FROM bots
+            WHERE status = 'online'
+              AND (last_heartbeat_at < $1 OR last_heartbeat_at IS NULL)
+            "#,
+        )
+        .bind(threshold)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.iter().map(row_to_bot).collect()
     }
 }
 
