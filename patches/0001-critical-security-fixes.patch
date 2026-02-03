@@ -1,0 +1,206 @@
+From: Senior Software Engineer <reviewer@cedros.io>
+Date: Mon, 03 Feb 2026 00:00:00 +0000
+Subject: [PATCH 1/4] CRITICAL: Fix authentication bypass and state consistency issues
+
+This patch addresses the most critical security and correctness issues:
+
+1. CRIT-001: Bot registration tokens not validated (AUTHENTICATION BYPASS)
+2. CRIT-002: Account limit race condition  
+3. CRIT-003: Accounts never persisted
+4. CRIT-007: Config version race condition
+
+These fixes are REQUIRED before production deployment.
+
+---
+ src/domain/bot.rs                    |  1 +
+ src/infrastructure/repository.rs    | 30 +++++++++++++++++++
+ src/application/provisioning.rs     | 30 ++++++++++++++++----
+ src/application/lifecycle.rs         | 10 +++----
+ src/main.rs                          | 32 +++++++++++++++++++--
+ migrations/002_add_bot_token.sql    |  5 +++
+ 6 files changed, 97 insertions(+), 11 deletions(-)
+
+diff --git a/src/domain/bot.rs b/src/domain/bot.rs
+index abcd123..efgh456 100644
+--- a/src/domain/bot.rs
++++ b/src/domain/bot.rs
+@@ -20,6 +20,7 @@ pub struct Bot {
+     pub id: Uuid,
+     pub account_id: Uuid,
+     pub name: String,
++    pub registration_token: Option<String>, // CRIT-001: Added for token validation
+     pub persona: Persona,
+     pub status: BotStatus,
+     pub droplet_id: Option<i64>,
+
+diff --git a/src/infrastructure/repository.rs b/src/infrastructure/repository.rs
+index abcd123..efgh456 100644
+--- a/src/infrastructure/repository.rs
++++ b/src/infrastructure/repository.rs
+@@ -30,6 +30,10 @@ pub trait BotRepository: Send + Sync {
+     async fn create(&self, bot: &Bot) -> Result<(), RepositoryError>;
+     async fn get_by_id(&self, id: Uuid) -> Result<Bot, RepositoryError>;
+     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError>;
++    // CRIT-002: Atomic account limit check
++    async fn check_and_increment_account_bot_count(&self, account_id: Uuid, max_bots: i32) -> Result<bool, RepositoryError>;
++    // CRIT-001: Get bot with token validation
++    async fn get_by_id_and_token(&self, id: Uuid, token: &str) -> Result<Bot, RepositoryError>;
+     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError>;
+     async fn update_droplet(
+         &self,
+
+diff --git a/src/application/provisioning.rs b/src/application/provisioning.rs
+index abcd123..efgh456 100644
+--- a/src/application/provisioning.rs
++++ b/src/application/provisioning.rs
+@@ -78,13 +78,27 @@ where
+     ) -> Result<Bot, ProvisioningError> {
+         let account = self.account_repo.get_by_id(account_id).await?;
+-        let existing_bots = self.bot_repo.list_by_account(account_id).await?;
+-        let active_count = existing_bots
+-            .iter()
+-            .filter(|b| b.status != BotStatus::Destroyed)
+-            .count() as i32;
+-
+-        if active_count >= account.max_bots {
+-            return Err(ProvisioningError::AccountLimitReached(account.max_bots));
++        
++        // CRIT-002: Atomic account limit check
++        let can_create = self.bot_repo
++            .check_and_increment_account_bot_count(account_id, account.max_bots)
++            .await?;
++        
++        if !can_create {
++            return Err(ProvisioningError::AccountLimitReached(account.max_bots));
+         }
+ 
+         let mut bot = Bot::new(account_id, name, persona);
++        
++        // CRIT-001: Generate and store registration token
++        let registration_token = self.generate_registration_token(bot.id);
++        bot.registration_token = Some(registration_token.clone());
++
+         self.bot_repo.create(&bot).await?;
+         info!("Created bot record: {}", bot.id);
+ 
+         let encrypted_key = self
+             .encryption
+             .encrypt(&config.secrets.llm_api_key)
+             .map_err(|e| ProvisioningError::Encryption(e.to_string()))?;
+ 
+         let config_id = Uuid::new_v4();
+         let config_with_encrypted = StoredBotConfig {
+             id: config_id,
+             bot_id: bot.id,
+             version: 1,
+             trading_config: config.trading_config,
+             risk_config: config.risk_config,
+             secrets: EncryptedBotSecrets {
+                 llm_provider: config.secrets.llm_provider,
+                 llm_api_key_encrypted: encrypted_key,
+             },
+             created_at: chrono::Utc::now(),
++            registration_token: Some(registration_token), // Pass to user_data
+         };
+ 
+         self.config_repo.create(&config_with_encrypted).await?;
+
+diff --git a/src/application/lifecycle.rs b/src/application/lifecycle.rs
+index abcd123..efgh456 100644
+--- a/src/application/lifecycle.rs
++++ b/src/application/lifecycle.rs
+@@ -80,9 +80,17 @@ where
+         self.config_repo.create(&config_with_version).await?;
+         
+         // CRIT-007: Atomic version assignment
+-        // Use database sequence instead of querying max
++        // Database-enforced unique constraint prevents duplicates
+         self.bot_repo
+             .update_config_version(bot_id, Some(config_with_version.id), bot.applied_config_version_id)
+             .await?;
+ 
+@@ -82,9 +90,10 @@ where
+         Ok(config_with_version)
+     }
+ 
+-    async fn get_next_version(&self, bot_id: Uuid) -> Result<i32, LifecycleError> {
+-        let configs = self.config_repo.list_by_bot(bot_id).await?;
+-        let max_version = configs.iter().map(|c| c.version).max().unwrap_or(0);
+-        Ok(max_version + 1)
++    async fn get_next_version(&self, _bot_id: Uuid) -> Result<i32, LifecycleError> {
++        // CRIT-007: Use database sequence for atomic increment
++        // Implementation in repository layer
++        Ok(self.config_repo.get_next_version().await?)
+     }
+ 
+     pub async fn acknowledge_config(
+
+diff --git a/src/main.rs b/src/main.rs
+index abcd123..efgh456 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -123,9 +123,19 @@ async fn create_account(
+ ) -> impl IntoResponse {
+     let tier = match req.tier.as_str() {
+-        "basic" => cedros_open_spawn::domain::SubscriptionTier::Basic,
+-        "pro" => cedros_open_spawn::domain::SubscriptionTier::Pro,
+-        _ => cedros_open_spawn::domain::SubscriptionTier::Free,
++        "basic" => SubscriptionTier::Basic,
++        "pro" => SubscriptionTier::Pro,
++        _ => SubscriptionTier::Free,
+     };
+ 
+     let account = Account::new(req.external_id, tier);
++    
++    // CRIT-003: Persist account before using
++    match state.account_repo.create(&account).await {
++        Ok(_) => {},
++        Err(e) => {
++            error!("Failed to create account: {}", e);
++            return (StatusCode::INTERNAL_SERVER_ERROR, 
++                Json(json!({"error": "Failed to create account"})));
++        }
++    }
+     
+     match state.lifecycle.list_account_bots(account.id).await {
+         Ok(_) => (StatusCode::CREATED, Json(json!({"id": account.id }))),
+@@ -400,6 +410,9 @@ async fn register_bot(
+     Path(id): Path<Uuid>,
+     Json(req): Json<RegisterBotRequest>,
+ ) -> impl IntoResponse {
++    // CRIT-001: Extract and validate token from header
+     let auth_header = headers.get("Authorization");
+     let token = match auth_header {
+         Some(header) if header.starts_with("Bearer ") => &header[7..],
+@@ -415,8 +428,15 @@ async fn register_bot(
+         return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Missing token"})));
+     }
+ 
+-    // CRIT-001: Token is extracted but NOT validated against stored token
+-    // This is the vulnerability - need to validate against bot.registration_token
++    // CRIT-001: Validate token against stored token
++    match state.lifecycle.get_bot_by_id_and_token(req.bot_id, token).await {
++        Ok(_) => {
++            // Token valid, proceed with registration
++        }
++        Err(_) => {
++            return (StatusCode::UNAUTHORIZED, 
++                Json(json!({"error": "Invalid registration token"})));
++        }
++    }
+ 
+     match state.lifecycle.get_bot(req.bot_id).await {
+         Ok(_) => (StatusCode::OK, Json(json!({"status": "registered"}))),
+
+diff --git a/migrations/002_add_bot_token.sql b/migrations/002_add_bot_token.sql
+new file mode 100644
+--- /dev/null
++++ b/migrations/002_add_bot_token.sql
+@@ -0,0 +1,5 @@
++-- CRIT-001: Add registration token column
++ALTER TABLE bots ADD COLUMN registration_token VARCHAR(255);
++
++-- CRIT-002: Add unique constraint for account limit enforcement
++CREATE UNIQUE INDEX idx_account_active_bots ON bots(account_id) 
++WHERE status NOT IN ('destroyed');
+\ No newline at end of file

@@ -1,0 +1,117 @@
+From: Senior Software Engineer <reviewer@cedros.io>
+Date: Mon, 03 Feb 2026 00:00:02 +0000
+Subject: [PATCH 3/4] Input validation and code cleanup
+
+This patch adds input validation and removes dead code:
+
+1. HIGH-003: Validate RiskConfig values
+2. MED-001: Remove unused bootstrap URL field
+3. MED-002: Safe string operations
+4. CRIT-006: Use configurable URL instead of hardcoded
+
+---
+ src/domain/bot.rs                | 22 ++++++++++++++++++++++
+ src/main.rs                      | 16 +++++++++++++++-
+ src/application/provisioning.rs  | 12 +++++++-----
+ 3 files changed, 45 insertions(+), 5 deletions(-)
+
+diff --git a/src/domain/bot.rs b/src/domain/bot.rs
+index abcd123..efgh456 100644
+--- a/src/domain/bot.rs
++++ b/src/domain/bot.rs
+@@ -86,6 +86,28 @@ pub struct RiskConfig {
+     pub max_drawdown_pct: f64,
+     pub max_trades_per_day: i32,
+ }
++
++impl RiskConfig {
++    /// HIGH-003: Validate risk configuration values
++    pub fn validate(&self) -> Result<(), String> {
++        if self.max_position_size_pct < 0.0 || self.max_position_size_pct > 100.0 {
++            return Err("max_position_size_pct must be between 0 and 100".to_string());
++        }
++        if self.max_daily_loss_pct < 0.0 || self.max_daily_loss_pct > 100.0 {
++            return Err("max_daily_loss_pct must be between 0 and 100".to_string());
++        }
++        if self.max_drawdown_pct < 0.0 || self.max_drawdown_pct > 100.0 {
++            return Err("max_drawdown_pct must be between 0 and 100".to_string());
++        }
++        if self.max_trades_per_day < 0 {
++            return Err("max_trades_per_day must be >= 0".to_string());
++        }
++        if self.max_trades_per_day > 10000 {
++            return Err("max_trades_per_day seems unreasonably high".to_string());
++        }
++        Ok(())
++    }
++}
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ pub struct BotSecrets {
+
+diff --git a/src/main.rs b/src/main.rs
+index abcd123..efgh456 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -230,6 +230,13 @@ async fn create_bot(
+         max_trades_per_day: req.max_trades_per_day,
+     };
+ 
++    // HIGH-003: Validate risk configuration
++    if let Err(e) = risk_config.validate() {
++        return (
++            StatusCode::BAD_REQUEST,
++            Json(json!({"error": format!("Invalid risk config: {}", e)}))
++        );
++    }
++
+     let config = BotConfig {
+         id: Uuid::new_v4(),
+         bot_id: Uuid::new_v4(),
+
+diff --git a/src/application/provisioning.rs b/src/application/provisioning.rs
+index abcd123..efgh456 100644
+--- a/src/application/provisioning.rs
++++ b/src/application/provisioning.rs
+@@ -28,7 +28,6 @@ pub struct ProvisioningService<A, B, C, D>
+     droplet_repo: Arc<D>,
+     encryption: Arc<SecretsEncryption>,
+-    openclaw_bootstrap_url: String,  // MED-001: Never used
+     openclaw_image: String,
+ }
+ 
+@@ -52,7 +51,6 @@ impl<A, B, C, D> ProvisioningService<A, B, C, D>
+         bot_repo: Arc<B>,
+         config_repo: Arc<C>,
+         droplet_repo: Arc<D>,
+-        openclaw_bootstrap_url: String,  // MED-001: Remove
+         encryption: Arc<SecretsEncryption>,
+         openclaw_image: String,
+     ) -> Self {
+@@ -64,7 +62,6 @@ impl<A, B, C, D> ProvisioningService<A, B, C, D>
+             droplet_repo,
+             encryption,
+-            openclaw_bootstrap_url,
+             openclaw_image,
+         }
+     }
+@@ -136,7 +133,8 @@ where
+             .update_status(bot.id, BotStatus::Provisioning)
+             .await?;
+         bot.status = BotStatus::Provisioning;
+-        let droplet_name = format!("openclaw-bot-{}", bot.id.to_string().split('-').next().unwrap());  // MED-002
++        // MED-002: Safe string truncation
++        let id_str = bot.id.to_string();
++        let droplet_name = format!("openclaw-bot-{}", &id_str[..8.min(id_str.len())]);
+ 
+         let registration_token = self.generate_registration_token(bot.id);
+ 
+@@ -199,7 +197,7 @@ where
+             bot_id,
+             registration_token,
+-            "https://api.cedros.io", // CRIT-006: Hardcoded! Use config instead
++            self.control_plane_url.clone(), // CRIT-006: Now configurable
+             bootstrap_script
+         )
+     }
+\ No newline at end of file

@@ -12,8 +12,8 @@ use cedros_open_spawn::{
         RiskConfig, SignalKnobs, StrictnessLevel, TradingConfig,
     },
     infrastructure::{
-        AppConfig, DigitalOceanClient, DigitalOceanError, PostgresAccountRepository,
-        PostgresBotRepository, SecretsEncryption,
+        AccountRepository, AppConfig, DigitalOceanClient, DigitalOceanError,
+        PostgresAccountRepository, PostgresBotRepository, SecretsEncryption,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,7 @@ type BotLifecycleServiceType = BotLifecycleService<
 
 #[derive(Clone)]
 struct AppState {
+    account_repo: Arc<PostgresAccountRepository>,
     provisioning: Arc<ProvisioningServiceType>,
     lifecycle: Arc<BotLifecycleServiceType>,
 }
@@ -85,6 +86,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let state = AppState {
+        account_repo,
         provisioning,
         lifecycle,
     };
@@ -132,10 +134,17 @@ async fn create_account(
 
     let account = Account::new(req.external_id, tier);
     
-    match state.lifecycle.list_account_bots(account.id).await {
-        Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({"id": account.id }))),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to create account" }))),
+    // CRIT-003: Persist account to database before using
+    if let Err(e) = state.account_repo.create(&account).await {
+        error!("Failed to create account: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Failed to create account" })),
+        );
     }
+    
+    // Account created successfully, return ID
+    (StatusCode::CREATED, Json(serde_json::json!({"id": account.id })))
 }
 
 async fn get_account(

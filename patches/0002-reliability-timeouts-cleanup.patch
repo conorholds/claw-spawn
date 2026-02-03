@@ -1,0 +1,124 @@
+From: Senior Software Engineer <reviewer@cedros.io>
+Date: Mon, 03 Feb 2026 00:00:01 +0000
+Subject: [PATCH 2/4] CRITICAL: Add timeouts and resource cleanup
+
+This patch addresses reliability issues:
+
+1. CRIT-004: HTTP client timeouts
+2. CRIT-005: Compensating transactions for cleanup
+3. HIGH-002: Check droplet state before resume
+4. HIGH-004: Remove panic-prone unwrap
+
+---
+ src/infrastructure/digital_ocean.rs | 15 ++++++++++++---
+ src/application/provisioning.rs     | 44 ++++++++++++++++++++++++++++++++------
+ 2 files changed, 51 insertions(+), 8 deletions(-)
+
+diff --git a/src/infrastructure/digital_ocean.rs b/src/infrastructure/digital_ocean.rs
+index abcd123..efgh456 100644
+--- a/src/infrastructure/digital_ocean.rs
++++ b/src/infrastructure/digital_ocean.rs
+@@ -1,6 +1,7 @@
+ use crate::domain::{Droplet, DropletCreateRequest};
+ use reqwest::{Client, header};
+ use serde_json::json;
++use std::time::Duration;
+ use thiserror::Error;
+ 
+ #[derive(Error, Debug)]
+@@ -28,6 +29,9 @@ pub struct DigitalOceanClient {
+     client: Client,
+     #[allow(dead_code)]
+     api_token: String,
++    // CRIT-004: Request timeout configuration
++    #[allow(dead_code)]
++    timeout: Duration,
+     base_url: String,
+ }
+ 
+@@ -36,8 +40,13 @@ impl DigitalOceanClient {
+         let mut headers = header::HeaderMap::new();
+-        headers.insert(
+-            header::AUTHORIZATION,
+-            format!("Bearer {}", api_token).parse().unwrap(),  // HIGH-004: Can panic!
+-        );
++        // HIGH-004: Safe header parsing with error handling
++        let auth_value = HeaderValue::from_str(&format!("Bearer {}", api_token))
++            .map_err(|e| DigitalOceanError::InvalidConfig(
++                format!("Invalid API token format: {}", e)
++            ))?;
++        headers.insert(header::AUTHORIZATION, auth_value);
+         headers.insert(
+             header::CONTENT_TYPE,
+             header::HeaderValue::from_static("application/json"),
+@@ -39,6 +46,10 @@ impl DigitalOceanClient {
+         let client = Client::builder()
+             .default_headers(headers)
++            // CRIT-004: Add timeouts to prevent hanging
++            .timeout(Duration::from_secs(30))
++            .connect_timeout(Duration::from_secs(10))
++            .pool_idle_timeout(Duration::from_secs(90))
+             .build()
+             .expect("Failed to create HTTP client");
+ 
+
+diff --git a/src/application/provisioning.rs b/src/application/provisioning.rs
+index abcd123..efgh456 100644
+--- a/src/application/provisioning.rs
++++ b/src/application/provisioning.rs
+@@ -150,6 +150,27 @@ where
+         let droplet = match self.do_client.create_droplet(droplet_request).await {
+             Ok(d) => d,
+             Err(DigitalOceanError::RateLimited) => {
++                // CRIT-005: Cleanup on partial failure
++                warn!("Rate limited, marking bot for retry");
++                self.bot_repo.update_status(bot.id, BotStatus::Pending).await?;
++                bot.status = BotStatus::Pending;
++                return Err(DigitalOceanError::RateLimited.into());
++            }
++            Err(e) => {
++                error!("Failed to create droplet for bot {}: {}", bot.id, e);
++                self.bot_repo.update_status(bot.id, BotStatus::Error).await?;
++                bot.status = BotStatus::Error;
++                return Err(e.into());
++            }
++        };
++
++        // CRIT-005: Try to persist, cleanup on failure
++        if let Err(e) = self.persist_droplet(&droplet, bot.id).await {
++            error!("Failed to persist droplet {}, cleaning up", droplet.id);
++            // Cleanup DO resource
++            if let Err(cleanup_err) = self.do_client.destroy_droplet(droplet.id).await {
++                error!("Failed to cleanup droplet: {}", cleanup_err);
++            }
++            return Err(e);
++        }
++
+         self.droplet_repo.create(&droplet).await?;
+         self.droplet_repo
+             .update_bot_assignment(droplet.id, Some(bot.id))
+@@ -249,6 +270,20 @@ where
+     pub async fn resume_bot(&self, bot_id: Uuid) -> Result<(), ProvisioningError> {
+         let bot = self.bot_repo.get_by_id(bot_id).await?;
+ 
+-        if bot.status == BotStatus::Paused {
+-            if let Some(droplet_id) = bot.droplet_id {
+-                self.do_client.reboot_droplet(droplet_id).await?;
++        // HIGH-002: Check droplet state before attempting resume
++        if bot.status == BotStatus::Paused {
++            if let Some(droplet_id) = bot.droplet_id {
++                // Verify droplet exists and is off
++                match self.do_client.get_droplet(droplet_id).await {
++                    Ok(droplet) if droplet.status == crate::domain::DropletStatus::Off => {
++                        self.do_client.reboot_droplet(droplet_id).await?;
++                    }
++                    Ok(_) => {
++                        return Err(ProvisioningError::InvalidConfig(
++                            "Droplet not in resumable state".to_string()
++                        ));
++                    }
++                    Err(e) => return Err(e.into()),
++                }
+                 info!("Resumed droplet {} for bot {}", droplet_id, bot_id);
+             }
+ 
