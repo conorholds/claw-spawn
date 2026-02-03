@@ -73,13 +73,20 @@ pub trait BotRepository: Send + Sync {
     #[must_use]
     async fn update_heartbeat(&self, bot_id: Uuid) -> Result<(), RepositoryError>;
     #[must_use]
-    async fn update_registration_token(&self, bot_id: Uuid, token: &str) -> Result<(), RepositoryError>;
+    async fn update_registration_token(
+        &self,
+        bot_id: Uuid,
+        token: &str,
+    ) -> Result<(), RepositoryError>;
     #[must_use]
     async fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
     /// Atomically increment bot counter for account, returning (success, current_count, max_count)
     /// CRIT-002: Prevents race conditions in account limit checking
     #[must_use]
-    async fn increment_bot_counter(&self, account_id: Uuid) -> Result<(bool, i32, i32), RepositoryError>;
+    async fn increment_bot_counter(
+        &self,
+        account_id: Uuid,
+    ) -> Result<(bool, i32, i32), RepositoryError>;
     /// Decrement bot counter when bot is destroyed
     #[must_use]
     async fn decrement_bot_counter(&self, account_id: Uuid) -> Result<(), RepositoryError>;
@@ -98,7 +105,10 @@ pub trait ConfigRepository: Send + Sync {
     #[must_use]
     async fn get_by_id(&self, id: Uuid) -> Result<StoredBotConfig, RepositoryError>;
     #[must_use]
-    async fn get_latest_for_bot(&self, bot_id: Uuid) -> Result<Option<StoredBotConfig>, RepositoryError>;
+    async fn get_latest_for_bot(
+        &self,
+        bot_id: Uuid,
+    ) -> Result<Option<StoredBotConfig>, RepositoryError>;
     #[must_use]
     async fn list_by_bot(&self, bot_id: Uuid) -> Result<Vec<StoredBotConfig>, RepositoryError>;
     /// Get next config version atomically using advisory locks
@@ -120,17 +130,9 @@ pub trait DropletRepository: Send + Sync {
         bot_id: Option<Uuid>,
     ) -> Result<(), RepositoryError>;
     #[must_use]
-    async fn update_status(
-        &self,
-        droplet_id: i64,
-        status: &str,
-    ) -> Result<(), RepositoryError>;
+    async fn update_status(&self, droplet_id: i64, status: &str) -> Result<(), RepositoryError>;
     #[must_use]
-    async fn update_ip(
-        &self,
-        droplet_id: i64,
-        ip: Option<String>,
-    ) -> Result<(), RepositoryError>;
+    async fn update_ip(&self, droplet_id: i64, ip: Option<String>) -> Result<(), RepositoryError>;
     #[must_use]
     async fn mark_destroyed(&self, droplet_id: i64) -> Result<(), RepositoryError>;
 }
@@ -253,7 +255,12 @@ fn row_to_account(row: &sqlx::postgres::PgRow) -> Result<Account, RepositoryErro
         "free" => SubscriptionTier::Free,
         "basic" => SubscriptionTier::Basic,
         "pro" => SubscriptionTier::Pro,
-        _ => return Err(RepositoryError::InvalidData(format!("Unknown tier: {}", tier_str))),
+        _ => {
+            return Err(RepositoryError::InvalidData(format!(
+                "Unknown tier: {}",
+                tier_str
+            )))
+        }
     };
 
     Ok(Account {
@@ -344,7 +351,9 @@ impl BotRepository for PostgresBotRepository {
         .fetch_one(&self.pool)
         .await
         .map_err(|e| match e {
-            sqlx::Error::RowNotFound => RepositoryError::NotFound(format!("Bot {} with invalid token", id)),
+            sqlx::Error::RowNotFound => {
+                RepositoryError::NotFound(format!("Bot {} with invalid token", id))
+            }
             _ => RepositoryError::DatabaseError(e),
         })?;
 
@@ -490,7 +499,11 @@ impl BotRepository for PostgresBotRepository {
         Ok(())
     }
 
-    async fn update_registration_token(&self, bot_id: Uuid, token: &str) -> Result<(), RepositoryError> {
+    async fn update_registration_token(
+        &self,
+        bot_id: Uuid,
+        token: &str,
+    ) -> Result<(), RepositoryError> {
         sqlx::query(
             r#"
             UPDATE bots
@@ -523,7 +536,10 @@ impl BotRepository for PostgresBotRepository {
         Ok(())
     }
 
-    async fn increment_bot_counter(&self, account_id: Uuid) -> Result<(bool, i32, i32), RepositoryError> {
+    async fn increment_bot_counter(
+        &self,
+        account_id: Uuid,
+    ) -> Result<(bool, i32, i32), RepositoryError> {
         let row = sqlx::query(
             r#"
             SELECT success, current_count, max_count
@@ -591,8 +607,9 @@ fn row_to_bot(row: &sqlx::postgres::PgRow) -> Result<Bot, RepositoryError> {
         id: row.try_get("id")?,
         account_id: row.try_get("account_id")?,
         name: row.try_get("name")?,
-        persona: Persona::from_str(&persona_str)
-            .map_err(|_| RepositoryError::InvalidData(format!("Unknown persona: {}", persona_str)))?,
+        persona: Persona::from_str(&persona_str).map_err(|_| {
+            RepositoryError::InvalidData(format!("Unknown persona: {}", persona_str))
+        })?,
         status: BotStatus::from_str(&status_str)
             .map_err(|_| RepositoryError::InvalidData(format!("Unknown status: {}", status_str)))?,
         droplet_id: row.try_get("droplet_id")?,

@@ -15,7 +15,10 @@ pub enum LifecycleError {
     #[error("Config not found: {0}")]
     ConfigNotFound(Uuid),
     #[error("Config version conflict: acknowledging {acknowledged}, but desired is {desired:?}")]
-    ConfigVersionConflict { acknowledged: Uuid, desired: Option<Uuid> },
+    ConfigVersionConflict {
+        acknowledged: Uuid,
+        desired: Option<Uuid>,
+    },
 }
 
 pub struct BotLifecycleService<B, C>
@@ -32,10 +35,7 @@ where
     B: BotRepository,
     C: ConfigRepository,
 {
-    pub fn new(
-        bot_repo: Arc<B>,
-        config_repo: Arc<C>,
-    ) -> Self {
+    pub fn new(bot_repo: Arc<B>, config_repo: Arc<C>) -> Self {
         Self {
             bot_repo,
             config_repo,
@@ -46,7 +46,11 @@ where
         Ok(self.bot_repo.get_by_id(bot_id).await?)
     }
 
-    pub async fn get_bot_with_token(&self, bot_id: Uuid, token: &str) -> Result<Bot, LifecycleError> {
+    pub async fn get_bot_with_token(
+        &self,
+        bot_id: Uuid,
+        token: &str,
+    ) -> Result<Bot, LifecycleError> {
         Ok(self.bot_repo.get_by_id_with_token(bot_id, token).await?)
     }
 
@@ -59,7 +63,10 @@ where
         limit: i64,
         offset: i64,
     ) -> Result<Vec<Bot>, LifecycleError> {
-        Ok(self.bot_repo.list_by_account_paginated(account_id, limit, offset).await?)
+        Ok(self
+            .bot_repo
+            .list_by_account_paginated(account_id, limit, offset)
+            .await?)
     }
 
     pub async fn create_bot_config(
@@ -86,7 +93,11 @@ where
 
         self.config_repo.create(&config_with_version).await?;
         self.bot_repo
-            .update_config_version(bot_id, Some(config_with_version.id), bot.applied_config_version_id)
+            .update_config_version(
+                bot_id,
+                Some(config_with_version.id),
+                bot.applied_config_version_id,
+            )
             .await?;
 
         info!(
@@ -122,14 +133,19 @@ where
             .await?;
 
         if bot.status == BotStatus::Provisioning || bot.status == BotStatus::Pending {
-            self.bot_repo.update_status(bot_id, BotStatus::Online).await?;
+            self.bot_repo
+                .update_status(bot_id, BotStatus::Online)
+                .await?;
         }
 
         info!("Bot {} acknowledged config {}", bot_id, config_id);
         Ok(())
     }
 
-    pub async fn get_desired_config(&self, bot_id: Uuid) -> Result<Option<StoredBotConfig>, LifecycleError> {
+    pub async fn get_desired_config(
+        &self,
+        bot_id: Uuid,
+    ) -> Result<Option<StoredBotConfig>, LifecycleError> {
         let bot = self.bot_repo.get_by_id(bot_id).await?;
 
         if let Some(config_id) = bot.desired_config_version_id {
@@ -161,7 +177,9 @@ where
                 "Bot {} heartbeat timeout (last: {:?}), marking as Error",
                 bot.id, bot.last_heartbeat_at
             );
-            self.bot_repo.update_status(bot.id, BotStatus::Error).await?;
+            self.bot_repo
+                .update_status(bot.id, BotStatus::Error)
+                .await?;
         }
 
         if !stale_bots.is_empty() {

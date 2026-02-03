@@ -8,8 +8,8 @@ use axum::{
 use claw_spawn::{
     application::{BotLifecycleService, ProvisioningError, ProvisioningService},
     domain::{
-        Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona,
-        RiskConfig, SignalKnobs, StrictnessLevel, TradingConfig,
+        Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona, RiskConfig,
+        SignalKnobs, StrictnessLevel, TradingConfig,
     },
     infrastructure::{
         AccountRepository, AppConfig, DigitalOceanClient, DigitalOceanError,
@@ -90,7 +90,10 @@ mod tests {
     #[test]
     fn f003_extract_bearer_token_happy_path() {
         let mut headers = HeaderMap::new();
-        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Bearer abc123"));
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer abc123"),
+        );
         assert_eq!(extract_bearer_token(&headers), Some("abc123"));
     }
 
@@ -107,7 +110,10 @@ mod tests {
     #[test]
     fn f003_extract_bearer_token_rejects_wrong_scheme() {
         let mut headers = HeaderMap::new();
-        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Basic abc123"));
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Basic abc123"),
+        );
         assert_eq!(extract_bearer_token(&headers), None);
     }
 
@@ -128,10 +134,7 @@ type ProvisioningServiceType = ProvisioningService<
     PostgresDropletRepository,
 >;
 
-type BotLifecycleServiceType = BotLifecycleService<
-    PostgresBotRepository,
-    PostgresConfigRepository,
->;
+type BotLifecycleServiceType = BotLifecycleService<PostgresBotRepository, PostgresConfigRepository>;
 
 #[derive(Clone)]
 struct AppState {
@@ -189,14 +192,16 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let config = AppConfig::from_env()?;
-    info!("Starting server on {}:{}", config.server_host, config.server_port);
+    info!(
+        "Starting server on {}:{}",
+        config.server_host, config.server_port
+    );
 
     let pool = PgPool::connect(&config.database_url).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
 
     let encryption = Arc::new(
-        SecretsEncryption::new(&config.encryption_key)
-            .expect("Failed to initialize encryption"),
+        SecretsEncryption::new(&config.encryption_key).expect("Failed to initialize encryption"),
     );
 
     let do_client = Arc::new(
@@ -249,9 +254,17 @@ async fn main() -> anyhow::Result<()> {
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", config.server_host, config.server_port)).await?;
-    info!("Server running at http://{}:{}", config.server_host, config.server_port);
-    info!("API documentation available at http://{}:{}/docs", config.server_host, config.server_port);
+    let listener =
+        tokio::net::TcpListener::bind(format!("{}:{}", config.server_host, config.server_port))
+            .await?;
+    info!(
+        "Server running at http://{}:{}",
+        config.server_host, config.server_port
+    );
+    info!(
+        "API documentation available at http://{}:{}/docs",
+        config.server_host, config.server_port
+    );
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -266,7 +279,7 @@ struct HealthResponse {
 }
 
 /// Health check endpoint
-/// 
+///
 /// Verifies database connectivity and returns service health status.
 #[utoipa::path(
     get,
@@ -281,16 +294,19 @@ async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
     // CLEAN-005: Query DB to verify connectivity
     match sqlx::query("SELECT 1").fetch_one(&state.pool).await {
         Ok(_) => (
-            StatusCode::OK, 
-            Json(HealthResponse { status: "healthy".to_string(), error: None })
+            StatusCode::OK,
+            Json(HealthResponse {
+                status: "healthy".to_string(),
+                error: None,
+            }),
         ),
         Err(e) => {
             error!("Health check failed: DB connectivity issue: {}", e);
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(HealthResponse { 
-                    status: "unhealthy".to_string(), 
-                    error: Some("Database connectivity failed".to_string()) 
+                Json(HealthResponse {
+                    status: "unhealthy".to_string(),
+                    error: Some("Database connectivity failed".to_string()),
                 }),
             )
         }
@@ -307,7 +323,7 @@ struct CreateAccountRequest {
 }
 
 /// Create a new account
-/// 
+///
 /// Creates a new account with the specified tier and returns the account ID.
 #[utoipa::path(
     post,
@@ -338,7 +354,7 @@ async fn create_account(
     };
 
     let account = Account::new(req.external_id, tier);
-    
+
     // CRIT-003: Persist account to database before using
     if let Err(e) = state.account_repo.create(&account).await {
         error!("Failed to create account: {}", e);
@@ -347,13 +363,16 @@ async fn create_account(
             Json(serde_json::json!({"error": "Failed to create account" })),
         );
     }
-    
+
     // Account created successfully, return ID
-    (StatusCode::CREATED, Json(serde_json::json!({"id": account.id })))
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({"id": account.id })),
+    )
 }
 
 /// Get account by ID
-/// 
+///
 /// Retrieves account information by ID.
 #[utoipa::path(
     get,
@@ -366,10 +385,7 @@ async fn create_account(
         (status = 501, description = "Not implemented")
     )
 )]
-async fn get_account(
-    State(_state): State<AppState>,
-    Path(_id): Path<Uuid>,
-) -> impl IntoResponse {
+async fn get_account(State(_state): State<AppState>, Path(_id): Path<Uuid>) -> impl IntoResponse {
     (StatusCode::NOT_IMPLEMENTED, "Get account not implemented")
 }
 
@@ -395,7 +411,7 @@ fn default_limit() -> i64 {
 const MAX_PAGINATION_LIMIT: i64 = 1000;
 
 /// List bots for an account
-/// 
+///
 /// Returns a paginated list of bots belonging to the specified account.
 #[utoipa::path(
     get,
@@ -418,8 +434,12 @@ async fn list_bots(
     // PERF-002: Clamp limit to max value to prevent abuse
     let limit = params.limit.min(MAX_PAGINATION_LIMIT).max(1);
     let offset = params.offset.max(0);
-    
-    match state.lifecycle.list_account_bots(account_id, limit, offset).await {
+
+    match state
+        .lifecycle
+        .list_account_bots(account_id, limit, offset)
+        .await
+    {
         Ok(bots) => {
             let bot_responses: Vec<BotResponse> = bots.into_iter().map(|b| b.into()).collect();
             (StatusCode::OK, Json(serde_json::json!(bot_responses)))
@@ -466,7 +486,7 @@ struct CreateBotRequest {
 }
 
 /// Create a new bot
-/// 
+///
 /// Creates a new trading bot with the specified configuration and provisions a DigitalOcean droplet.
 #[utoipa::path(
     post,
@@ -617,7 +637,7 @@ async fn create_bot(
 }
 
 /// Get bot by ID
-/// 
+///
 /// Retrieves detailed information about a specific bot.
 #[utoipa::path(
     get,
@@ -631,10 +651,7 @@ async fn create_bot(
         (status = 404, description = "Bot not found", body = Object)
     )
 )]
-async fn get_bot(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> impl IntoResponse {
+async fn get_bot(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
     match state.lifecycle.get_bot(id).await {
         Ok(bot) => {
             let response: BotResponse = bot.into();
@@ -648,7 +665,7 @@ async fn get_bot(
 }
 
 /// Get bot configuration
-/// 
+///
 /// Retrieves the current configuration for a bot.
 #[utoipa::path(
     get,
@@ -663,10 +680,7 @@ async fn get_bot(
         (status = 500, description = "Failed to get config", body = Object)
     )
 )]
-async fn get_bot_config(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> impl IntoResponse {
+async fn get_bot_config(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
     match state.lifecycle.get_desired_config(id).await {
         Ok(Some(config)) => (StatusCode::OK, Json(serde_json::json!(config))),
         Ok(None) => (
@@ -689,7 +703,7 @@ struct BotActionRequest {
 }
 
 /// Perform bot action
-/// 
+///
 /// Performs lifecycle actions on a bot: pause, resume, redeploy, or destroy.
 #[utoipa::path(
     post,
@@ -715,7 +729,9 @@ async fn bot_action(
         "resume" => state.provisioning.resume_bot(id).await,
         "redeploy" => state.provisioning.redeploy_bot(id).await,
         "destroy" => state.provisioning.destroy_bot(id).await,
-        _ => Err(ProvisioningError::InvalidConfig("Unknown action".to_string())),
+        _ => Err(ProvisioningError::InvalidConfig(
+            "Unknown action".to_string(),
+        )),
     };
 
     match result {
@@ -731,7 +747,7 @@ async fn bot_action(
 }
 
 /// Get desired config for bot
-/// 
+///
 /// Retrieves the desired configuration that a bot should apply.
 #[utoipa::path(
     get,
@@ -791,7 +807,7 @@ struct AckConfigRequest {
 }
 
 /// Acknowledge configuration
-/// 
+///
 /// Bot acknowledges it has applied a configuration version.
 #[utoipa::path(
     post,
@@ -831,7 +847,10 @@ async fn acknowledge_config(
     }
 
     match state.lifecycle.acknowledge_config(id, req.config_id).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "acknowledged"}))),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "acknowledged"})),
+        ),
         Err(_) => (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": "Failed to acknowledge config" })),
@@ -840,7 +859,7 @@ async fn acknowledge_config(
 }
 
 /// Record heartbeat
-/// 
+///
 /// Records a heartbeat from a bot to indicate it's alive.
 #[utoipa::path(
     post,
@@ -894,7 +913,7 @@ struct RegisterBotRequest {
 }
 
 /// Register a bot
-/// 
+///
 /// Bot registration endpoint called by the bot on startup.
 /// Requires a valid registration token in the Authorization header.
 #[utoipa::path(
@@ -912,9 +931,7 @@ async fn register_bot(
     headers: HeaderMap,
     Json(req): Json<RegisterBotRequest>,
 ) -> impl IntoResponse {
-    let auth_header = headers
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok());
+    let auth_header = headers.get("Authorization").and_then(|v| v.to_str().ok());
 
     let token = match auth_header {
         Some(header) if header.starts_with("Bearer ") => &header[7..],
@@ -937,7 +954,10 @@ async fn register_bot(
     match state.lifecycle.get_bot_with_token(req.bot_id, token).await {
         Ok(bot) => {
             info!("Bot {} registered successfully with valid token", bot.id);
-            (StatusCode::OK, Json(serde_json::json!({"status": "registered"})))
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"status": "registered"})),
+            )
         }
         Err(_) => (
             StatusCode::UNAUTHORIZED,

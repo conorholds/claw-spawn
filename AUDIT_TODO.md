@@ -63,12 +63,14 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
 
 ## Medium
 
-- [ ] F-006 Make repo pass `cargo fmt --check`
+- [x] F-006 Make repo pass `cargo fmt --check`
   - Files: `src/**/*.rs`
   - Planned fix:
     - Run `cargo fmt` (format-only changes)
   - Test plan:
     - `cargo fmt --check`
+  - Completed:
+    - Applied rustfmt; verified via `cargo fmt --check` and `cargo test`
 
 - [x] F-007 Add DB index for account bot pagination ordering
   - Files: `migrations/*` (new migration)

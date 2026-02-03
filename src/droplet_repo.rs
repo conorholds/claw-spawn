@@ -146,7 +146,10 @@ fn string_to_droplet_status(status: &str) -> Result<DropletStatus, RepositoryErr
         "off" => Ok(DropletStatus::Off),
         "destroyed" => Ok(DropletStatus::Destroyed),
         "error" => Ok(DropletStatus::Error),
-        _ => Err(RepositoryError::InvalidData(format!("Unknown droplet status: {}", status))),
+        _ => Err(RepositoryError::InvalidData(format!(
+            "Unknown droplet status: {}",
+            status
+        ))),
     }
 }
 

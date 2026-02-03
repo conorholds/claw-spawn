@@ -2,17 +2,19 @@
 //! CLEAN-003: Comprehensive test suite covering account creation, bot lifecycle,
 //! config versioning, and authentication.
 
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use claw_spawn::{
     application::BotLifecycleService,
     domain::{
-        Account, AlgorithmMode, AssetFocus, Bot, BotStatus, Droplet,
-        DropletStatus, EncryptedBotSecrets, Persona, RiskConfig,
-        StoredBotConfig, StrictnessLevel, SubscriptionTier, TradingConfig,
+        Account, AlgorithmMode, AssetFocus, Bot, BotStatus, Droplet, DropletStatus,
+        EncryptedBotSecrets, Persona, RiskConfig, StoredBotConfig, StrictnessLevel,
+        SubscriptionTier, TradingConfig,
     },
-    infrastructure::{AccountRepository, BotRepository, ConfigRepository, DropletRepository, RepositoryError},
+    infrastructure::{
+        AccountRepository, BotRepository, ConfigRepository, DropletRepository, RepositoryError,
+    },
 };
-use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -33,11 +35,13 @@ impl AccountRepository for MockAccountRepository {
     async fn create(&self, account: &Account) -> Result<(), RepositoryError> {
         let mut accounts = self.accounts.lock().unwrap();
         let mut external_ids = self.external_ids.lock().unwrap();
-        
+
         if accounts.contains_key(&account.id) {
-            return Err(RepositoryError::InvalidData("Account already exists".to_string()));
+            return Err(RepositoryError::InvalidData(
+                "Account already exists".to_string(),
+            ));
         }
-        
+
         accounts.insert(account.id, account.clone());
         external_ids.insert(account.external_id.clone(), account.id);
         Ok(())
@@ -54,7 +58,7 @@ impl AccountRepository for MockAccountRepository {
     async fn get_by_external_id(&self, external_id: &str) -> Result<Account, RepositoryError> {
         let external_ids = self.external_ids.lock().unwrap();
         let accounts = self.accounts.lock().unwrap();
-        
+
         external_ids
             .get(external_id)
             .and_then(|id| accounts.get(id).cloned())
@@ -70,7 +74,7 @@ impl AccountRepository for MockAccountRepository {
         let account = accounts
             .get_mut(&id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Account {}", id)))?;
-        
+
         account.max_bots = match tier {
             SubscriptionTier::Free => 0,
             SubscriptionTier::Basic => 2,
@@ -95,17 +99,16 @@ impl BotRepository for MockBotRepository {
     async fn create(&self, bot: &Bot) -> Result<(), RepositoryError> {
         let mut bots = self.bots.lock().unwrap();
         let mut account_bots = self.account_bots.lock().unwrap();
-        
+
         if bots.contains_key(&bot.id) {
-            return Err(RepositoryError::InvalidData("Bot already exists".to_string()));
+            return Err(RepositoryError::InvalidData(
+                "Bot already exists".to_string(),
+            ));
         }
-        
+
         bots.insert(bot.id, bot.clone());
-        account_bots
-            .entry(bot.account_id)
-            .or_default()
-            .push(bot.id);
-        
+        account_bots.entry(bot.account_id).or_default().push(bot.id);
+
         Ok(())
     }
 
@@ -127,13 +130,13 @@ impl BotRepository for MockBotRepository {
     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError> {
         let bots = self.bots.lock().unwrap();
         let account_bots = self.account_bots.lock().unwrap();
-        
+
         let bot_ids = account_bots.get(&account_id).cloned().unwrap_or_default();
         let result: Vec<Bot> = bot_ids
             .iter()
             .filter_map(|id| bots.get(id).cloned())
             .collect();
-        
+
         Ok(result)
     }
 
@@ -152,18 +155,22 @@ impl BotRepository for MockBotRepository {
         let bot = bots
             .get_mut(&id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Bot {}", id)))?;
-        
+
         bot.status = status;
         bot.updated_at = Utc::now();
         Ok(())
     }
 
-    async fn update_droplet(&self, bot_id: Uuid, droplet_id: Option<i64>) -> Result<(), RepositoryError> {
+    async fn update_droplet(
+        &self,
+        bot_id: Uuid,
+        droplet_id: Option<i64>,
+    ) -> Result<(), RepositoryError> {
         let mut bots = self.bots.lock().unwrap();
         let bot = bots
             .get_mut(&bot_id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Bot {}", bot_id)))?;
-        
+
         bot.droplet_id = droplet_id;
         bot.updated_at = Utc::now();
         Ok(())
@@ -179,7 +186,7 @@ impl BotRepository for MockBotRepository {
         let bot = bots
             .get_mut(&bot_id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Bot {}", bot_id)))?;
-        
+
         bot.desired_config_version_id = desired;
         bot.applied_config_version_id = applied;
         bot.updated_at = Utc::now();
@@ -191,18 +198,22 @@ impl BotRepository for MockBotRepository {
         let bot = bots
             .get_mut(&bot_id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Bot {}", bot_id)))?;
-        
+
         bot.last_heartbeat_at = Some(Utc::now());
         bot.updated_at = Utc::now();
         Ok(())
     }
 
-    async fn update_registration_token(&self, bot_id: Uuid, token: &str) -> Result<(), RepositoryError> {
+    async fn update_registration_token(
+        &self,
+        bot_id: Uuid,
+        token: &str,
+    ) -> Result<(), RepositoryError> {
         let mut bots = self.bots.lock().unwrap();
         let bot = bots
             .get_mut(&bot_id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Bot {}", bot_id)))?;
-        
+
         bot.registration_token = Some(token.to_string());
         bot.updated_at = Utc::now();
         Ok(())
@@ -216,17 +227,20 @@ impl BotRepository for MockBotRepository {
         Ok(())
     }
 
-    async fn increment_bot_counter(&self, account_id: Uuid) -> Result<(bool, i32, i32), RepositoryError> {
+    async fn increment_bot_counter(
+        &self,
+        account_id: Uuid,
+    ) -> Result<(bool, i32, i32), RepositoryError> {
         let mut counter = self.counter.lock().unwrap();
         let current = counter.get(&account_id).cloned().unwrap_or(0);
-        
+
         // Mock account with Basic tier (2 bots max)
         let max_bots = 2;
-        
+
         if current >= max_bots {
             return Ok((false, current, max_bots));
         }
-        
+
         counter.insert(account_id, current + 1);
         Ok((true, current + 1, max_bots))
     }
@@ -234,11 +248,11 @@ impl BotRepository for MockBotRepository {
     async fn decrement_bot_counter(&self, account_id: Uuid) -> Result<(), RepositoryError> {
         let mut counter = self.counter.lock().unwrap();
         let current = counter.get(&account_id).cloned().unwrap_or(0);
-        
+
         if current > 0 {
             counter.insert(account_id, current - 1);
         }
-        
+
         Ok(())
     }
 
@@ -251,10 +265,7 @@ impl BotRepository for MockBotRepository {
         Ok(count)
     }
 
-    async fn list_stale_bots(
-        &self,
-        threshold: DateTime<Utc>,
-    ) -> Result<Vec<Bot>, RepositoryError> {
+    async fn list_stale_bots(&self, threshold: DateTime<Utc>) -> Result<Vec<Bot>, RepositoryError> {
         let bots = self.bots.lock().unwrap();
         let stale: Vec<Bot> = bots
             .values()
@@ -281,13 +292,13 @@ impl ConfigRepository for MockConfigRepository {
     async fn create(&self, config: &StoredBotConfig) -> Result<(), RepositoryError> {
         let mut configs = self.configs.lock().unwrap();
         let mut bot_configs = self.bot_configs.lock().unwrap();
-        
+
         configs.insert(config.id, config.clone());
         bot_configs
             .entry(config.bot_id)
             .or_default()
             .push(config.id);
-        
+
         Ok(())
     }
 
@@ -299,30 +310,33 @@ impl ConfigRepository for MockConfigRepository {
             .ok_or_else(|| RepositoryError::NotFound(format!("Config {}", id)))
     }
 
-    async fn get_latest_for_bot(&self, bot_id: Uuid) -> Result<Option<StoredBotConfig>, RepositoryError> {
+    async fn get_latest_for_bot(
+        &self,
+        bot_id: Uuid,
+    ) -> Result<Option<StoredBotConfig>, RepositoryError> {
         let configs = self.configs.lock().unwrap();
         let bot_configs = self.bot_configs.lock().unwrap();
-        
+
         let config_ids = bot_configs.get(&bot_id).cloned().unwrap_or_default();
         let latest = config_ids
             .iter()
             .filter_map(|id| configs.get(id))
             .max_by_key(|c| c.version)
             .cloned();
-        
+
         Ok(latest)
     }
 
     async fn list_by_bot(&self, bot_id: Uuid) -> Result<Vec<StoredBotConfig>, RepositoryError> {
         let configs = self.configs.lock().unwrap();
         let bot_configs = self.bot_configs.lock().unwrap();
-        
+
         let config_ids = bot_configs.get(&bot_id).cloned().unwrap_or_default();
         let result: Vec<StoredBotConfig> = config_ids
             .iter()
             .filter_map(|id| configs.get(id).cloned())
             .collect();
-        
+
         Ok(result)
     }
 
@@ -356,12 +370,16 @@ impl DropletRepository for MockDropletRepository {
             .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", id)))
     }
 
-    async fn update_bot_assignment(&self, droplet_id: i64, bot_id: Option<Uuid>) -> Result<(), RepositoryError> {
+    async fn update_bot_assignment(
+        &self,
+        droplet_id: i64,
+        bot_id: Option<Uuid>,
+    ) -> Result<(), RepositoryError> {
         let mut droplets = self.droplets.lock().unwrap();
         let droplet = droplets
             .get_mut(&droplet_id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", droplet_id)))?;
-        
+
         droplet.bot_id = bot_id;
         Ok(())
     }
@@ -371,7 +389,7 @@ impl DropletRepository for MockDropletRepository {
         let droplet = droplets
             .get_mut(&droplet_id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", droplet_id)))?;
-        
+
         droplet.status = match status {
             "active" => DropletStatus::Active,
             "off" => DropletStatus::Off,
@@ -386,7 +404,7 @@ impl DropletRepository for MockDropletRepository {
         let droplet = droplets
             .get_mut(&droplet_id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", droplet_id)))?;
-        
+
         droplet.ip_address = ip;
         Ok(())
     }
@@ -396,7 +414,7 @@ impl DropletRepository for MockDropletRepository {
         let droplet = droplets
             .get_mut(&droplet_id)
             .ok_or_else(|| RepositoryError::NotFound(format!("Droplet {}", droplet_id)))?;
-        
+
         droplet.status = DropletStatus::Destroyed;
         Ok(())
     }
@@ -447,33 +465,42 @@ fn create_test_stored_config(bot_id: Uuid, version: i32) -> StoredBotConfig {
 #[tokio::test]
 async fn test_account_creation() {
     let account_repo = Arc::new(MockAccountRepository::default());
-    
+
     // Test creating an account
     let account = Account::new("test-external-id".to_string(), SubscriptionTier::Basic);
     let account_id = account.id;
-    
-    account_repo.create(&account).await.expect("Failed to create account");
-    
+
+    account_repo
+        .create(&account)
+        .await
+        .expect("Failed to create account");
+
     // Test retrieving by ID
-    let retrieved = account_repo.get_by_id(account_id).await.expect("Failed to get account");
+    let retrieved = account_repo
+        .get_by_id(account_id)
+        .await
+        .expect("Failed to get account");
     assert_eq!(retrieved.id, account_id);
     assert_eq!(retrieved.external_id, "test-external-id");
     assert_eq!(retrieved.subscription_tier, SubscriptionTier::Basic);
-    
+
     // Test retrieving by external ID
     let by_external = account_repo
         .get_by_external_id("test-external-id")
         .await
         .expect("Failed to get by external ID");
     assert_eq!(by_external.id, account_id);
-    
+
     // Test updating subscription
     account_repo
         .update_subscription(account_id, SubscriptionTier::Pro)
         .await
         .expect("Failed to update subscription");
-    
-    let updated = account_repo.get_by_id(account_id).await.expect("Failed to get updated");
+
+    let updated = account_repo
+        .get_by_id(account_id)
+        .await
+        .expect("Failed to get updated");
     assert_eq!(updated.subscription_tier, SubscriptionTier::Pro);
     assert_eq!(updated.max_bots, 4); // Pro tier has 4 bots
 }
@@ -482,52 +509,64 @@ async fn test_account_creation() {
 async fn test_bot_lifecycle() {
     let account_repo = Arc::new(MockAccountRepository::default());
     let bot_repo = Arc::new(MockBotRepository::default());
-    
+
     // Create account first
     let account = Account::new("lifecycle-test".to_string(), SubscriptionTier::Basic);
     let account_id = account.id;
-    account_repo.create(&account).await.expect("Failed to create account");
-    
+    account_repo
+        .create(&account)
+        .await
+        .expect("Failed to create account");
+
     // Create bot using Bot::new
     let bot = Bot::new(account_id, "Test Bot".to_string(), Persona::Beginner);
     let bot_id = bot.id;
-    
+
     bot_repo.create(&bot).await.expect("Failed to create bot");
-    
+
     // Verify initial state
     let retrieved = bot_repo.get_by_id(bot_id).await.expect("Failed to get bot");
     assert_eq!(retrieved.status, BotStatus::Pending);
     assert_eq!(retrieved.name, "Test Bot");
     assert_eq!(retrieved.persona, Persona::Beginner);
-    
+
     // Update status through lifecycle
     bot_repo
         .update_status(bot_id, BotStatus::Provisioning)
         .await
         .expect("Failed to update status");
-    
+
     let provisioning = bot_repo.get_by_id(bot_id).await.expect("Failed to get bot");
     assert_eq!(provisioning.status, BotStatus::Provisioning);
-    
+
     // Simulate bot coming online
     bot_repo
         .update_status(bot_id, BotStatus::Online)
         .await
         .expect("Failed to set online");
-    
+
     // Record heartbeat
-    bot_repo.update_heartbeat(bot_id).await.expect("Failed to record heartbeat");
+    bot_repo
+        .update_heartbeat(bot_id)
+        .await
+        .expect("Failed to record heartbeat");
     let with_heartbeat = bot_repo.get_by_id(bot_id).await.expect("Failed to get bot");
     assert!(with_heartbeat.last_heartbeat_at.is_some());
-    
+
     // Pause bot
-    bot_repo.update_status(bot_id, BotStatus::Paused).await.expect("Failed to pause");
+    bot_repo
+        .update_status(bot_id, BotStatus::Paused)
+        .await
+        .expect("Failed to pause");
     let paused = bot_repo.get_by_id(bot_id).await.expect("Failed to get bot");
     assert_eq!(paused.status, BotStatus::Paused);
-    
+
     // Resume bot
-    bot_repo.update_status(bot_id, BotStatus::Online).await.expect("Failed to resume");
-    
+    bot_repo
+        .update_status(bot_id, BotStatus::Online)
+        .await
+        .expect("Failed to resume");
+
     // Destroy bot
     bot_repo.delete(bot_id).await.expect("Failed to delete bot");
     let destroyed = bot_repo.get_by_id(bot_id).await.expect("Failed to get bot");
@@ -538,28 +577,38 @@ async fn test_bot_lifecycle() {
 async fn test_config_versioning() {
     let config_repo = Arc::new(MockConfigRepository::default());
     let bot_repo = Arc::new(MockBotRepository::default());
-    
+
     let bot_id = Uuid::new_v4();
-    
+
     // Create a bot for the config
-    let bot = Bot::new(Uuid::new_v4(), "Config Test Bot".to_string(), Persona::Beginner);
+    let bot = Bot::new(
+        Uuid::new_v4(),
+        "Config Test Bot".to_string(),
+        Persona::Beginner,
+    );
     bot_repo.create(&bot).await.expect("Failed to create bot");
-    
+
     // Create initial config (version 1)
     let config1 = create_test_stored_config(bot_id, 1);
-    config_repo.create(&config1).await.expect("Failed to create config 1");
-    
+    config_repo
+        .create(&config1)
+        .await
+        .expect("Failed to create config 1");
+
     // Verify we can retrieve it
     let retrieved = config_repo
         .get_by_id(config1.id)
         .await
         .expect("Failed to get config");
     assert_eq!(retrieved.version, 1);
-    
+
     // Create version 2
     let config2 = create_test_stored_config(bot_id, 2);
-    config_repo.create(&config2).await.expect("Failed to create config 2");
-    
+    config_repo
+        .create(&config2)
+        .await
+        .expect("Failed to create config 2");
+
     // Get latest - should be version 2
     let latest = config_repo
         .get_latest_for_bot(bot_id)
@@ -567,18 +616,21 @@ async fn test_config_versioning() {
         .expect("Failed to get latest")
         .expect("No latest config");
     assert_eq!(latest.version, 2);
-    
+
     // List all configs
-    let all_configs = config_repo.list_by_bot(bot_id).await.expect("Failed to list configs");
+    let all_configs = config_repo
+        .list_by_bot(bot_id)
+        .await
+        .expect("Failed to list configs");
     assert_eq!(all_configs.len(), 2);
-    
+
     // Test atomic version generation
     let next_version = config_repo
         .get_next_version_atomic(bot_id)
         .await
         .expect("Failed to get next version");
     assert_eq!(next_version, 1); // First call for this bot
-    
+
     let next_version2 = config_repo
         .get_next_version_atomic(bot_id)
         .await
@@ -589,34 +641,38 @@ async fn test_config_versioning() {
 #[tokio::test]
 async fn test_authentication_registration_token() {
     let bot_repo = Arc::new(MockBotRepository::default());
-    
+
     // Create bot without token
-    let bot = Bot::new(Uuid::new_v4(), "Auth Test Bot".to_string(), Persona::Beginner);
+    let bot = Bot::new(
+        Uuid::new_v4(),
+        "Auth Test Bot".to_string(),
+        Persona::Beginner,
+    );
     let bot_id = bot.id;
     bot_repo.create(&bot).await.expect("Failed to create bot");
-    
+
     // Initially no token set
     let initial = bot_repo.get_by_id(bot_id).await.expect("Failed to get bot");
     assert!(initial.registration_token.is_none());
-    
+
     // Set registration token
     let token = "test-registration-token-12345";
     bot_repo
         .update_registration_token(bot_id, token)
         .await
         .expect("Failed to set token");
-    
+
     // Verify token was set
     let with_token = bot_repo.get_by_id(bot_id).await.expect("Failed to get bot");
     assert_eq!(with_token.registration_token, Some(token.to_string()));
-    
+
     // Test get_by_id_with_token with correct token
     let authenticated = bot_repo
         .get_by_id_with_token(bot_id, token)
         .await
         .expect("Failed to authenticate with correct token");
     assert_eq!(authenticated.id, bot_id);
-    
+
     // Test get_by_id_with_token with wrong token - should fail
     let wrong_token_result = bot_repo.get_by_id_with_token(bot_id, "wrong-token").await;
     assert!(wrong_token_result.is_err());
@@ -632,7 +688,7 @@ async fn test_risk_config_validation() {
         max_trades_per_day: 10,
     };
     assert!(valid.validate().is_ok());
-    
+
     // Test invalid - negative percentage
     let invalid_negative = RiskConfig {
         max_position_size_pct: -10.0,
@@ -644,7 +700,7 @@ async fn test_risk_config_validation() {
     assert!(result.is_err());
     let errors = result.unwrap_err();
     assert!(errors.iter().any(|e| e.contains("max_position_size_pct")));
-    
+
     // Test invalid - over 100%
     let invalid_over_100 = RiskConfig {
         max_position_size_pct: 150.0,
@@ -654,7 +710,7 @@ async fn test_risk_config_validation() {
     };
     let result2 = invalid_over_100.validate();
     assert!(result2.is_err());
-    
+
     // Test invalid - negative trades per day
     let invalid_trades = RiskConfig {
         max_position_size_pct: 10.0,
@@ -672,9 +728,9 @@ async fn test_risk_config_validation() {
 async fn test_account_limit_enforcement() {
     let bot_repo = Arc::new(MockBotRepository::default());
     let account_id = Uuid::new_v4();
-    
+
     // Mock account has Basic tier with 2 bot limit
-    
+
     // First bot - should succeed
     let (success1, count1, max1) = bot_repo
         .increment_bot_counter(account_id)
@@ -683,7 +739,7 @@ async fn test_account_limit_enforcement() {
     assert!(success1);
     assert_eq!(count1, 1);
     assert_eq!(max1, 2);
-    
+
     // Second bot - should succeed
     let (success2, count2, max2) = bot_repo
         .increment_bot_counter(account_id)
@@ -692,7 +748,7 @@ async fn test_account_limit_enforcement() {
     assert!(success2);
     assert_eq!(count2, 2);
     assert_eq!(max2, 2);
-    
+
     // Third bot - should fail (at limit)
     let (success3, count3, max3) = bot_repo
         .increment_bot_counter(account_id)
@@ -701,13 +757,13 @@ async fn test_account_limit_enforcement() {
     assert!(!success3); // Should fail
     assert_eq!(count3, 2); // Count stays at max
     assert_eq!(max3, 2);
-    
+
     // Decrement counter
     bot_repo
         .decrement_bot_counter(account_id)
         .await
         .expect("Failed to decrement");
-    
+
     // Now should succeed again
     let (success4, count4, _) = bot_repo
         .increment_bot_counter(account_id)
@@ -720,26 +776,39 @@ async fn test_account_limit_enforcement() {
 #[tokio::test]
 async fn test_stale_bot_detection() {
     let bot_repo = Arc::new(MockBotRepository::default());
-    let lifecycle = BotLifecycleService::new(bot_repo.clone(), Arc::new(MockConfigRepository::default()));
-    
+    let lifecycle =
+        BotLifecycleService::new(bot_repo.clone(), Arc::new(MockConfigRepository::default()));
+
     // Create bot and set it online
     let bot = Bot::new(Uuid::new_v4(), "Stale Bot".to_string(), Persona::Beginner);
     let bot_id = bot.id;
     bot_repo.create(&bot).await.expect("Failed to create bot");
-    bot_repo.update_status(bot_id, BotStatus::Online).await.expect("Failed to set online");
-    
+    bot_repo
+        .update_status(bot_id, BotStatus::Online)
+        .await
+        .expect("Failed to set online");
+
     // Initially not stale (just set online with no heartbeat)
     let threshold = Utc::now() - chrono::Duration::minutes(5);
-    let stale = bot_repo.list_stale_bots(threshold).await.expect("Failed to list stale");
+    let stale = bot_repo
+        .list_stale_bots(threshold)
+        .await
+        .expect("Failed to list stale");
     assert!(stale.iter().any(|b| b.id == bot_id)); // No heartbeat = stale
-    
+
     // Record heartbeat
-    bot_repo.update_heartbeat(bot_id).await.expect("Failed to record heartbeat");
-    
+    bot_repo
+        .update_heartbeat(bot_id)
+        .await
+        .expect("Failed to record heartbeat");
+
     // Now not stale
-    let stale2 = bot_repo.list_stale_bots(threshold).await.expect("Failed to list stale");
+    let stale2 = bot_repo
+        .list_stale_bots(threshold)
+        .await
+        .expect("Failed to list stale");
     assert!(!stale2.iter().any(|b| b.id == bot_id));
-    
+
     // Check via lifecycle service
     let stale_via_service = lifecycle
         .check_stale_bots(chrono::Duration::minutes(5))
@@ -752,21 +821,27 @@ async fn test_stale_bot_detection() {
 async fn test_pagination() {
     let bot_repo = Arc::new(MockBotRepository::default());
     let account_id = Uuid::new_v4();
-    
+
     // Create 5 bots
     for i in 0..5 {
         let bot = Bot::new(account_id, format!("Bot {}", i), Persona::Beginner);
         bot_repo.create(&bot).await.expect("Failed to create bot");
     }
-    
+
     // Get all
-    let all = bot_repo.list_by_account(account_id).await.expect("Failed to list");
+    let all = bot_repo
+        .list_by_account(account_id)
+        .await
+        .expect("Failed to list");
     assert_eq!(all.len(), 5);
-    
+
     // Get count
-    let count = bot_repo.count_by_account(account_id).await.expect("Failed to count");
+    let count = bot_repo
+        .count_by_account(account_id)
+        .await
+        .expect("Failed to count");
     assert_eq!(count, 5);
-    
+
     // Paginated - limit 2
     let page1 = bot_repo
         .list_by_account_paginated(account_id, 2, 0)
@@ -780,22 +855,25 @@ async fn test_pagination() {
 async fn test_bot_name_sanitization() {
     // This test verifies the sanitize_bot_name logic is applied
     // In real code, this would be called before creating a bot
-    
+
     // Test cases that would be sanitized:
     // - "Test Bot" -> "Test Bot" (valid)
     // - "Test@Bot" -> "Test_Bot" (special char replaced)
     // - "   Test   " -> "Test" (trimmed)
     // - Very long name -> truncated to 64 chars
-    
+
     // Since sanitize_bot_name is private in provisioning.rs,
     // we verify it works by checking the bot name doesn't cause issues
     let bot_repo = Arc::new(MockBotRepository::default());
     let account_id = Uuid::new_v4();
-    
+
     // Bot with special chars - should be stored fine
     let bot = Bot::new(account_id, "Test@#$Bot".to_string(), Persona::Beginner);
-    bot_repo.create(&bot).await.expect("Failed to create bot with special chars");
-    
+    bot_repo
+        .create(&bot)
+        .await
+        .expect("Failed to create bot with special chars");
+
     let retrieved = bot_repo.get_by_id(bot.id).await.expect("Failed to get bot");
     assert_eq!(retrieved.name, "Test@#$Bot"); // In mock, stored as-is
 }
@@ -805,34 +883,40 @@ async fn test_config_version_conflict_detection() {
     let config_repo = Arc::new(MockConfigRepository::default());
     let bot_repo = Arc::new(MockBotRepository::default());
     let lifecycle = BotLifecycleService::new(bot_repo.clone(), config_repo.clone());
-    
+
     let account_id = Uuid::new_v4();
     let bot = Bot::new(account_id, "Conflict Test".to_string(), Persona::Beginner);
     let bot_id = bot.id;
     bot_repo.create(&bot).await.expect("Failed to create bot");
-    
+
     // Create config v1
     let config1 = create_test_stored_config(bot_id, 1);
-    config_repo.create(&config1).await.expect("Failed to create config 1");
-    
+    config_repo
+        .create(&config1)
+        .await
+        .expect("Failed to create config 1");
+
     // Set as desired config
     bot_repo
         .update_config_version(bot_id, Some(config1.id), None)
         .await
         .expect("Failed to set desired");
-    
+
     // Acknowledge v1 - should succeed
     let result = lifecycle.acknowledge_config(bot_id, config1.id).await;
     assert!(result.is_ok());
-    
+
     // Create config v2 and update desired
     let config2 = create_test_stored_config(bot_id, 2);
-    config_repo.create(&config2).await.expect("Failed to create config 2");
+    config_repo
+        .create(&config2)
+        .await
+        .expect("Failed to create config 2");
     bot_repo
         .update_config_version(bot_id, Some(config2.id), Some(config1.id))
         .await
         .expect("Failed to set desired v2");
-    
+
     // Try to acknowledge v1 again - should fail (MED-004: version conflict)
     let result2 = lifecycle.acknowledge_config(bot_id, config1.id).await;
     assert!(result2.is_err());

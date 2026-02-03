@@ -17,10 +17,12 @@ impl PostgresConfigRepository {
 #[async_trait]
 impl ConfigRepository for PostgresConfigRepository {
     async fn create(&self, config: &StoredBotConfig) -> Result<(), RepositoryError> {
-        let trading_json = serde_json::to_value(&config.trading_config)
-            .map_err(|e| RepositoryError::InvalidData(format!("Failed to serialize trading config: {}", e)))?;
-        let risk_json = serde_json::to_value(&config.risk_config)
-            .map_err(|e| RepositoryError::InvalidData(format!("Failed to serialize risk config: {}", e)))?;
+        let trading_json = serde_json::to_value(&config.trading_config).map_err(|e| {
+            RepositoryError::InvalidData(format!("Failed to serialize trading config: {}", e))
+        })?;
+        let risk_json = serde_json::to_value(&config.risk_config).map_err(|e| {
+            RepositoryError::InvalidData(format!("Failed to serialize risk config: {}", e))
+        })?;
 
         sqlx::query(
             r#"
@@ -61,7 +63,10 @@ impl ConfigRepository for PostgresConfigRepository {
         Ok(row_to_config(&row)?)
     }
 
-    async fn get_latest_for_bot(&self, bot_id: Uuid) -> Result<Option<StoredBotConfig>, RepositoryError> {
+    async fn get_latest_for_bot(
+        &self,
+        bot_id: Uuid,
+    ) -> Result<Option<StoredBotConfig>, RepositoryError> {
         let row = sqlx::query(
             r#"
             SELECT id, bot_id, version, trading_config, risk_config, secrets_encrypted, llm_provider, created_at
@@ -117,10 +122,12 @@ fn row_to_config(row: &sqlx::postgres::PgRow) -> Result<StoredBotConfig, Reposit
     let risk_json: serde_json::Value = row.try_get("risk_config")?;
     let encrypted_secrets: Vec<u8> = row.try_get("secrets_encrypted")?;
 
-    let trading_config: TradingConfig = serde_json::from_value(trading_json)
-        .map_err(|e| RepositoryError::InvalidData(format!("Failed to deserialize trading config: {}", e)))?;
-    let risk_config: RiskConfig = serde_json::from_value(risk_json)
-        .map_err(|e| RepositoryError::InvalidData(format!("Failed to deserialize risk config: {}", e)))?;
+    let trading_config: TradingConfig = serde_json::from_value(trading_json).map_err(|e| {
+        RepositoryError::InvalidData(format!("Failed to deserialize trading config: {}", e))
+    })?;
+    let risk_config: RiskConfig = serde_json::from_value(risk_json).map_err(|e| {
+        RepositoryError::InvalidData(format!("Failed to deserialize risk config: {}", e))
+    })?;
 
     let llm_provider: String = row.try_get("llm_provider")?;
 

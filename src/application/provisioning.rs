@@ -21,11 +21,7 @@ const RETRY_DELAYS_MS: [u64; RETRY_ATTEMPTS - 1] = [100, 200];
 
 /// REL-001: Retry an async operation with exponential backoff
 /// Logs each retry attempt with structured context
-async fn retry_with_backoff<F, Fut, T, E>(
-    operation_name: &str,
-    bot_id: Uuid,
-    f: F,
-) -> Result<T, E>
+async fn retry_with_backoff<F, Fut, T, E>(operation_name: &str, bot_id: Uuid, f: F) -> Result<T, E>
 where
     F: Fn() -> Fut,
     Fut: std::future::Future<Output = Result<T, E>>,
@@ -265,16 +261,10 @@ mod tests {
     struct NoopDropletRepo;
     #[async_trait]
     impl DropletRepository for NoopDropletRepo {
-        async fn create(
-            &self,
-            _droplet: &crate::domain::Droplet,
-        ) -> Result<(), RepositoryError> {
+        async fn create(&self, _droplet: &crate::domain::Droplet) -> Result<(), RepositoryError> {
             Err(RepositoryError::InvalidData("noop".to_string()))
         }
-        async fn get_by_id(
-            &self,
-            _id: i64,
-        ) -> Result<crate::domain::Droplet, RepositoryError> {
+        async fn get_by_id(&self, _id: i64) -> Result<crate::domain::Droplet, RepositoryError> {
             Err(RepositoryError::InvalidData("noop".to_string()))
         }
         async fn update_bot_assignment(
@@ -311,17 +301,21 @@ mod tests {
         );
         let do_client = Arc::new(DigitalOceanClient::new("test-token".to_string()).unwrap());
 
-        let svc: ProvisioningService<NoopAccountRepo, NoopBotRepo, NoopConfigRepo, NoopDropletRepo> =
-            ProvisioningService::new(
-                do_client,
-                Arc::new(NoopAccountRepo::default()),
-                Arc::new(NoopBotRepo::default()),
-                Arc::new(NoopConfigRepo::default()),
-                Arc::new(NoopDropletRepo::default()),
-                encryption,
-                "ubuntu-22-04-x64".to_string(),
-                "https://example.invalid".to_string(),
-            );
+        let svc: ProvisioningService<
+            NoopAccountRepo,
+            NoopBotRepo,
+            NoopConfigRepo,
+            NoopDropletRepo,
+        > = ProvisioningService::new(
+            do_client,
+            Arc::new(NoopAccountRepo::default()),
+            Arc::new(NoopBotRepo::default()),
+            Arc::new(NoopConfigRepo::default()),
+            Arc::new(NoopDropletRepo::default()),
+            encryption,
+            "ubuntu-22-04-x64".to_string(),
+            "https://example.invalid".to_string(),
+        );
 
         let bot_id = Uuid::new_v4();
         let user_data = svc.test_only_generate_user_data("reg-token", bot_id);
@@ -398,10 +392,11 @@ where
         span.record("account_id", account_id.to_string());
 
         let _account = self.account_repo.get_by_id(account_id).await?;
-        
+
         // CRIT-002: Use atomic counter for race-condition-free limit checking
-        let (success, _current_count, max_count) = self.bot_repo.increment_bot_counter(account_id).await?;
-        
+        let (success, _current_count, max_count) =
+            self.bot_repo.increment_bot_counter(account_id).await?;
+
         if !success {
             warn!(
                 account_id = %account_id,
@@ -419,13 +414,13 @@ where
             sanitized_name = %sanitized_name,
             "Creating bot with sanitized name"
         );
-        
+
         let mut bot = Bot::new(account_id, sanitized_name, persona);
 
         // CRIT-005: Resource cleanup - if DB operations fail after this point,
         // we need to decrement the counter we just incremented
         let result = self.create_bot_internal(&mut bot, config).await;
-        
+
         if result.is_err() {
             // Decrement counter on failure to allow retry
             if let Err(e) = self.bot_repo.decrement_bot_counter(account_id).await {
@@ -437,7 +432,7 @@ where
                 );
             }
         }
-        
+
         result.map(|_| bot)
     }
 
@@ -481,7 +476,11 @@ where
         Ok(())
     }
 
-    async fn spawn_bot(&self, bot: &mut Bot, config: &StoredBotConfig) -> Result<(), ProvisioningError> {
+    async fn spawn_bot(
+        &self,
+        bot: &mut Bot,
+        config: &StoredBotConfig,
+    ) -> Result<(), ProvisioningError> {
         // REL-003: Add structured logging context
         let span = Span::current();
         span.record("bot_id", bot.id.to_string());
@@ -502,9 +501,11 @@ where
         let id_str = bot.id.to_string();
         let droplet_name = format!("openclaw-bot-{}", &id_str[..8.min(id_str.len())]);
         let registration_token = self.generate_registration_token(bot.id);
-        
+
         // CRIT-001: Store registration token in database
-        self.bot_repo.update_registration_token(bot.id, &registration_token).await?;
+        self.bot_repo
+            .update_registration_token(bot.id, &registration_token)
+            .await?;
         bot.registration_token = Some(registration_token.clone());
 
         let user_data = self.generate_user_data(&registration_token, bot.id, config);
@@ -526,7 +527,9 @@ where
                     bot_id = %bot.id,
                     "Rate limited by DigitalOcean, bot will retry"
                 );
-                self.bot_repo.update_status(bot.id, BotStatus::Pending).await?;
+                self.bot_repo
+                    .update_status(bot.id, BotStatus::Pending)
+                    .await?;
                 bot.status = BotStatus::Pending;
                 return Err(DigitalOceanError::RateLimited.into());
             }
@@ -536,7 +539,9 @@ where
                     error = %e,
                     "Failed to create droplet for bot"
                 );
-                self.bot_repo.update_status(bot.id, BotStatus::Error).await?;
+                self.bot_repo
+                    .update_status(bot.id, BotStatus::Error)
+                    .await?;
                 bot.status = BotStatus::Error;
                 return Err(e.into());
             }
@@ -548,9 +553,12 @@ where
             self.droplet_repo
                 .update_bot_assignment(droplet.id, Some(bot.id))
                 .await?;
-            self.bot_repo.update_droplet(bot.id, Some(droplet.id)).await?;
+            self.bot_repo
+                .update_droplet(bot.id, Some(droplet.id))
+                .await?;
             Ok(())
-        }.await;
+        }
+        .await;
 
         if let Err(ref e) = db_result {
             // CRIT-005: DB persistence failed - attempt to clean up DO droplet
@@ -560,7 +568,7 @@ where
                 error = %e,
                 "DB persistence failed after DO droplet created. Attempting cleanup"
             );
-            
+
             match self.do_client.destroy_droplet(droplet.id).await {
                 Ok(_) => {
                     info!(
@@ -578,7 +586,7 @@ where
                     );
                 }
             }
-            
+
             // Update bot status to error since droplet creation failed at persistence stage
             if let Err(status_err) = self.bot_repo.update_status(bot.id, BotStatus::Error).await {
                 error!(
@@ -588,7 +596,7 @@ where
                 );
             }
             bot.status = BotStatus::Error;
-            
+
             return Err(db_result.unwrap_err());
         }
 
@@ -603,10 +611,15 @@ where
         Ok(())
     }
 
-    fn generate_user_data(&self, registration_token: &str, bot_id: Uuid, _config: &StoredBotConfig) -> String {
+    fn generate_user_data(
+        &self,
+        registration_token: &str,
+        bot_id: Uuid,
+        _config: &StoredBotConfig,
+    ) -> String {
         // Read the bootstrap script and prepend environment variables
         let bootstrap_script = include_str!("../../scripts/openclaw-bootstrap.sh");
-        
+
         // CRIT-006: Use configured control plane URL instead of hardcoded value
         format!(
             r##"#!/bin/bash
@@ -623,40 +636,40 @@ export CONTROL_PLANE_URL="{}"
 # Start of embedded bootstrap script
 {}
 "##,
-            bot_id,
-            registration_token,
-            bot_id,
-            self.control_plane_url,
-            bootstrap_script
+            bot_id, registration_token, bot_id, self.control_plane_url, bootstrap_script
         )
     }
 
     #[cfg(test)]
     fn test_only_generate_user_data(&self, registration_token: &str, bot_id: Uuid) -> String {
         // Helper to keep tests focused without additional config setup.
-        self.generate_user_data(registration_token, bot_id, &StoredBotConfig {
-            id: Uuid::new_v4(),
+        self.generate_user_data(
+            registration_token,
             bot_id,
-            version: 1,
-            trading_config: crate::domain::TradingConfig {
-                asset_focus: crate::domain::AssetFocus::Majors,
-                algorithm: crate::domain::AlgorithmMode::Trend,
-                strictness: crate::domain::StrictnessLevel::Medium,
-                paper_mode: true,
-                signal_knobs: None,
+            &StoredBotConfig {
+                id: Uuid::new_v4(),
+                bot_id,
+                version: 1,
+                trading_config: crate::domain::TradingConfig {
+                    asset_focus: crate::domain::AssetFocus::Majors,
+                    algorithm: crate::domain::AlgorithmMode::Trend,
+                    strictness: crate::domain::StrictnessLevel::Medium,
+                    paper_mode: true,
+                    signal_knobs: None,
+                },
+                risk_config: crate::domain::RiskConfig {
+                    max_position_size_pct: 10.0,
+                    max_daily_loss_pct: 5.0,
+                    max_drawdown_pct: 10.0,
+                    max_trades_per_day: 10,
+                },
+                secrets: crate::domain::EncryptedBotSecrets {
+                    llm_provider: "test".to_string(),
+                    llm_api_key_encrypted: vec![1, 2, 3],
+                },
+                created_at: chrono::Utc::now(),
             },
-            risk_config: crate::domain::RiskConfig {
-                max_position_size_pct: 10.0,
-                max_daily_loss_pct: 5.0,
-                max_drawdown_pct: 10.0,
-                max_trades_per_day: 10,
-            },
-            secrets: crate::domain::EncryptedBotSecrets {
-                llm_provider: "test".to_string(),
-                llm_api_key_encrypted: vec![1, 2, 3],
-            },
-            created_at: chrono::Utc::now(),
-        })
+        )
     }
 
     fn generate_registration_token(&self, _bot_id: Uuid) -> String {
@@ -675,7 +688,7 @@ export CONTROL_PLANE_URL="{}"
 
         if let Some(droplet_id) = bot.droplet_id {
             span.record("droplet_id", droplet_id);
-            
+
             match self.do_client.destroy_droplet(droplet_id).await {
                 Ok(_) => {
                     info!(
@@ -683,13 +696,13 @@ export CONTROL_PLANE_URL="{}"
                         droplet_id = droplet_id,
                         "Destroyed droplet for bot"
                     );
-                    
+
                     // REL-001: Retry on failure for compensating transaction
-                    if let Err(e) = retry_with_backoff(
-                        "mark_destroyed",
-                        bot_id,
-                        || self.droplet_repo.mark_destroyed(droplet_id)
-                    ).await {
+                    if let Err(e) = retry_with_backoff("mark_destroyed", bot_id, || {
+                        self.droplet_repo.mark_destroyed(droplet_id)
+                    })
+                    .await
+                    {
                         error!(
                             bot_id = %bot_id,
                             droplet_id = droplet_id,
@@ -705,13 +718,13 @@ export CONTROL_PLANE_URL="{}"
                         droplet_id = droplet_id,
                         "Droplet already destroyed or not found"
                     );
-                    
+
                     // REL-001: Retry on failure for compensating transaction
-                    if let Err(e) = retry_with_backoff(
-                        "mark_destroyed",
-                        bot_id,
-                        || self.droplet_repo.mark_destroyed(droplet_id)
-                    ).await {
+                    if let Err(e) = retry_with_backoff("mark_destroyed", bot_id, || {
+                        self.droplet_repo.mark_destroyed(droplet_id)
+                    })
+                    .await
+                    {
                         error!(
                             bot_id = %bot_id,
                             droplet_id = droplet_id,
@@ -734,11 +747,11 @@ export CONTROL_PLANE_URL="{}"
         }
 
         // REL-001: Retry DB updates with backoff
-        if let Err(e) = retry_with_backoff(
-            "update_droplet",
-            bot_id,
-            || self.bot_repo.update_droplet(bot_id, None)
-        ).await {
+        if let Err(e) = retry_with_backoff("update_droplet", bot_id, || {
+            self.bot_repo.update_droplet(bot_id, None)
+        })
+        .await
+        {
             error!(
                 bot_id = %bot_id,
                 error = %e,
@@ -747,11 +760,9 @@ export CONTROL_PLANE_URL="{}"
             return Err(e.into());
         }
 
-        if let Err(e) = retry_with_backoff(
-            "delete_bot",
-            bot_id,
-            || self.bot_repo.delete(bot_id)
-        ).await {
+        if let Err(e) =
+            retry_with_backoff("delete_bot", bot_id, || self.bot_repo.delete(bot_id)).await
+        {
             error!(
                 bot_id = %bot_id,
                 error = %e,
@@ -759,14 +770,14 @@ export CONTROL_PLANE_URL="{}"
             );
             return Err(e.into());
         }
-        
+
         // CRIT-002: Decrement bot counter when bot is destroyed
         // REL-001: Retry counter decrement
-        if let Err(e) = retry_with_backoff(
-            "decrement_bot_counter",
-            bot_id,
-            || self.bot_repo.decrement_bot_counter(bot.account_id)
-        ).await {
+        if let Err(e) = retry_with_backoff("decrement_bot_counter", bot_id, || {
+            self.bot_repo.decrement_bot_counter(bot.account_id)
+        })
+        .await
+        {
             error!(
                 bot_id = %bot_id,
                 account_id = %bot.account_id,
@@ -791,7 +802,9 @@ export CONTROL_PLANE_URL="{}"
             info!("Paused droplet {} for bot {}", droplet_id, bot_id);
         }
 
-        self.bot_repo.update_status(bot_id, BotStatus::Paused).await?;
+        self.bot_repo
+            .update_status(bot_id, BotStatus::Paused)
+            .await?;
         Ok(())
     }
 
@@ -799,9 +812,10 @@ export CONTROL_PLANE_URL="{}"
         let bot = self.bot_repo.get_by_id(bot_id).await?;
 
         if bot.status != BotStatus::Paused {
-            return Err(ProvisioningError::InvalidConfig(
-                format!("Bot {} is not in paused state (current: {:?})", bot_id, bot.status)
-            ));
+            return Err(ProvisioningError::InvalidConfig(format!(
+                "Bot {} is not in paused state (current: {:?})",
+                bot_id, bot.status
+            )));
         }
 
         if let Some(droplet_id) = bot.droplet_id {
@@ -816,35 +830,44 @@ export CONTROL_PLANE_URL="{}"
                         }
                         crate::domain::DropletStatus::Active => {
                             // Droplet is already running, just update status
-                            info!("Droplet {} for bot {} is already active", droplet_id, bot_id);
+                            info!(
+                                "Droplet {} for bot {} is already active",
+                                droplet_id, bot_id
+                            );
                         }
                         crate::domain::DropletStatus::New => {
                             // Droplet is still being created, not ready
-                            return Err(ProvisioningError::InvalidConfig(
-                                format!("Droplet {} is still being created, cannot resume yet", droplet_id)
-                            ));
+                            return Err(ProvisioningError::InvalidConfig(format!(
+                                "Droplet {} is still being created, cannot resume yet",
+                                droplet_id
+                            )));
                         }
                         _ => {
-                            return Err(ProvisioningError::InvalidConfig(
-                                format!("Droplet {} is in state {:?}, cannot resume", droplet_id, droplet.status)
-                            ));
+                            return Err(ProvisioningError::InvalidConfig(format!(
+                                "Droplet {} is in state {:?}, cannot resume",
+                                droplet_id, droplet.status
+                            )));
                         }
                     }
                 }
                 Err(DigitalOceanError::NotFound(_)) => {
-                    return Err(ProvisioningError::InvalidConfig(
-                        format!("Droplet {} for bot {} no longer exists in DigitalOcean", droplet_id, bot_id)
-                    ));
+                    return Err(ProvisioningError::InvalidConfig(format!(
+                        "Droplet {} for bot {} no longer exists in DigitalOcean",
+                        droplet_id, bot_id
+                    )));
                 }
                 Err(e) => return Err(e.into()),
             }
         } else {
-            return Err(ProvisioningError::InvalidConfig(
-                format!("Bot {} has no associated droplet", bot_id)
-            ));
+            return Err(ProvisioningError::InvalidConfig(format!(
+                "Bot {} has no associated droplet",
+                bot_id
+            )));
         }
 
-        self.bot_repo.update_status(bot_id, BotStatus::Online).await?;
+        self.bot_repo
+            .update_status(bot_id, BotStatus::Online)
+            .await?;
         Ok(())
     }
 
@@ -861,10 +884,13 @@ export CONTROL_PLANE_URL="{}"
         }
 
         // Get the latest config for redeployment
-        let config = self.config_repo
+        let config = self
+            .config_repo
             .get_latest_for_bot(bot_id)
             .await?
-            .ok_or_else(|| ProvisioningError::InvalidConfig("No config found for redeployment".to_string()))?;
+            .ok_or_else(|| {
+                ProvisioningError::InvalidConfig("No config found for redeployment".to_string())
+            })?;
 
         bot.droplet_id = None;
         self.spawn_bot(&mut bot, &config).await?;
@@ -886,7 +912,9 @@ export CONTROL_PLANE_URL="{}"
                         _ => "error",
                     };
 
-                    self.droplet_repo.update_status(droplet_id, status_str).await?;
+                    self.droplet_repo
+                        .update_status(droplet_id, status_str)
+                        .await?;
 
                     if let Some(ip) = droplet.ip_address {
                         self.droplet_repo.update_ip(droplet_id, Some(ip)).await?;
@@ -904,7 +932,9 @@ export CONTROL_PLANE_URL="{}"
                 Err(DigitalOceanError::NotFound(_)) => {
                     warn!("Droplet {} for bot {} not found", droplet_id, bot_id);
                     if bot.status != BotStatus::Destroyed && bot.status != BotStatus::Error {
-                        self.bot_repo.update_status(bot_id, BotStatus::Error).await?;
+                        self.bot_repo
+                            .update_status(bot_id, BotStatus::Error)
+                            .await?;
                     }
                 }
                 Err(e) => {

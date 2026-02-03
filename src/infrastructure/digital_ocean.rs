@@ -1,5 +1,5 @@
 use crate::domain::{Droplet, DropletCreateRequest};
-use reqwest::{Client, header};
+use reqwest::{header, Client};
 use serde_json::json;
 use std::time::Duration;
 use thiserror::Error;
@@ -62,7 +62,9 @@ impl DigitalOceanClient {
             .connect_timeout(Duration::from_secs(10))
             .pool_idle_timeout(Duration::from_secs(90))
             .build()
-            .map_err(|e| DigitalOceanError::InvalidConfig(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                DigitalOceanError::InvalidConfig(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         Ok(Self {
             client,
@@ -98,7 +100,7 @@ impl DigitalOceanClient {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    
+
                     if status == 429 {
                         return Err(DigitalOceanError::RateLimited);
                     }
@@ -123,9 +125,9 @@ impl DigitalOceanClient {
                         .await
                         .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
 
-                    let droplet_data = json_response
-                        .get("droplet")
-                        .ok_or_else(|| DigitalOceanError::InvalidResponse("Missing droplet field".to_string()))?;
+                    let droplet_data = json_response.get("droplet").ok_or_else(|| {
+                        DigitalOceanError::InvalidResponse("Missing droplet field".to_string())
+                    })?;
 
                     let do_response: crate::domain::DigitalOceanDropletResponse =
                         serde_json::from_value(droplet_data.clone())
@@ -144,7 +146,9 @@ impl DigitalOceanClient {
         }
 
         Err(DigitalOceanError::RequestFailed(
-            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+            last_error
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "Max retries exceeded".to_string()),
         ))
     }
 
@@ -160,7 +164,7 @@ impl DigitalOceanClient {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    
+
                     if status == 429 {
                         return Err(DigitalOceanError::RateLimited);
                     }
@@ -189,9 +193,9 @@ impl DigitalOceanClient {
                         .await
                         .map_err(|e| DigitalOceanError::InvalidResponse(e.to_string()))?;
 
-                    let droplet_data = json_response
-                        .get("droplet")
-                        .ok_or_else(|| DigitalOceanError::InvalidResponse("Missing droplet field".to_string()))?;
+                    let droplet_data = json_response.get("droplet").ok_or_else(|| {
+                        DigitalOceanError::InvalidResponse("Missing droplet field".to_string())
+                    })?;
 
                     let do_response: crate::domain::DigitalOceanDropletResponse =
                         serde_json::from_value(droplet_data.clone())
@@ -210,7 +214,9 @@ impl DigitalOceanClient {
         }
 
         Err(DigitalOceanError::RequestFailed(
-            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+            last_error
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "Max retries exceeded".to_string()),
         ))
     }
 
@@ -226,7 +232,7 @@ impl DigitalOceanClient {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    
+
                     if status == 429 {
                         return Err(DigitalOceanError::RateLimited);
                     }
@@ -263,7 +269,9 @@ impl DigitalOceanClient {
         }
 
         Err(DigitalOceanError::RequestFailed(
-            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+            last_error
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "Max retries exceeded".to_string()),
         ))
     }
 
@@ -284,7 +292,7 @@ impl DigitalOceanClient {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    
+
                     if status == 429 {
                         return Err(DigitalOceanError::RateLimited);
                     }
@@ -317,7 +325,9 @@ impl DigitalOceanClient {
         }
 
         Err(DigitalOceanError::RequestFailed(
-            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+            last_error
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "Max retries exceeded".to_string()),
         ))
     }
 
@@ -338,7 +348,7 @@ impl DigitalOceanClient {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    
+
                     if status == 429 {
                         return Err(DigitalOceanError::RateLimited);
                     }
@@ -371,7 +381,9 @@ impl DigitalOceanClient {
         }
 
         Err(DigitalOceanError::RequestFailed(
-            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Max retries exceeded".to_string())
+            last_error
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "Max retries exceeded".to_string()),
         ))
     }
 }
