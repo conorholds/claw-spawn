@@ -102,6 +102,46 @@ pub struct RiskConfig {
     pub max_trades_per_day: i32,
 }
 
+impl RiskConfig {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
+        if !(0.0..=100.0).contains(&self.max_position_size_pct) {
+            errors.push(format!(
+                "max_position_size_pct must be between 0 and 100, got {}",
+                self.max_position_size_pct
+            ));
+        }
+
+        if !(0.0..=100.0).contains(&self.max_daily_loss_pct) {
+            errors.push(format!(
+                "max_daily_loss_pct must be between 0 and 100, got {}",
+                self.max_daily_loss_pct
+            ));
+        }
+
+        if !(0.0..=100.0).contains(&self.max_drawdown_pct) {
+            errors.push(format!(
+                "max_drawdown_pct must be between 0 and 100, got {}",
+                self.max_drawdown_pct
+            ));
+        }
+
+        if self.max_trades_per_day < 0 {
+            errors.push(format!(
+                "max_trades_per_day must be >= 0, got {}",
+                self.max_trades_per_day
+            ));
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BotSecrets {
     pub llm_provider: String,

@@ -126,19 +126,20 @@
   - Try resume → expect clear error
 - **Status:** Pending
 
-### [ ] HIGH-003: No Input Validation on Risk Config
+### [x] HIGH-003: No Input Validation on Risk Config
 - **File:** `src/main.rs:232-237`
 - **Issue:** Risk configuration accepts negative or >100% values
 - **Fix:**
-  - Add RiskConfig.validate() method
+  - Add RiskConfig.validate() method in src/domain/bot.rs
   - Check percentages are 0-100
   - Check trades_per_day is non-negative
-  - Return 400 Bad Request on invalid
+  - Return 400 Bad Request with descriptive error messages on invalid
 - **Test Plan:**
   - POST /bots with negative percentage → expect 400
   - POST with >100% → expect 400
   - POST with valid values → expect 201
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Implemented validate() method that returns Result<(), Vec<String>> with detailed error messages. The create_bot handler now calls validation before creating bot and returns 400 Bad Request with error details on failure.
 
 ### [ ] HIGH-004: Potential Panic on Invalid API Token
 - **File:** `src/infrastructure/digital_ocean.rs:32`

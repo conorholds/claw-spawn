@@ -245,6 +245,17 @@ async fn create_bot(
         max_trades_per_day: req.max_trades_per_day,
     };
 
+    if let Err(errors) = risk_config.validate() {
+        error!("RiskConfig validation failed: {:?}", errors);
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Invalid risk configuration",
+                "details": errors
+            })),
+        );
+    }
+
     let config = BotConfig {
         id: Uuid::new_v4(),
         bot_id: Uuid::new_v4(),
