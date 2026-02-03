@@ -2,6 +2,10 @@
 
 Complete Digital Ocean VPS provisioning and OpenClaw bot orchestration service.
 
+This repo supports:
+- Standalone microservice (`claw-spawn-server`)
+- Embedding into a larger Axum server via `claw_spawn::server::router(...)`
+
 ## 🚀 Super Quick Start (One Command)
 
 Just run `make` and you're ready to go:
@@ -111,6 +115,14 @@ The Docker setup includes:
 | `CEDROS_CUSTOMIZER_SKIP_GIT` | No | `true` | Skip git init at droplet bootstrap |
 | `CEDROS_CUSTOMIZER_SKIP_HEARTBEAT` | No | `true` | Skip heartbeat install at droplet bootstrap |
 
+## 🪂 Droplet Bootstrap Notes
+
+- The droplet must be able to reach `CEDROS_CONTROL_PLANE_URL` over HTTPS.
+  If you run `claw-spawn` locally, you typically need a tunnel (ngrok/cloudflared) until you have a live URL.
+- Workspace customization (janebot-cli) runs once and writes:
+  - Marker: `/opt/openclaw/.customizer_ran`
+  - Status: `/opt/openclaw/customizer_status.txt`
+
 ## 🧩 Embedded Usage (Integrate Into Larger Axum Server)
 
 `claw-spawn` supports a dual architecture:
@@ -130,6 +142,18 @@ let pool = PgPool::connect(&cfg.database_url).await?;
 let state = build_state_with_pool(cfg, pool, /* run_migrations */ true).await?;
 
 let app = Router::new().nest("/spawn", router(state));
+```
+
+## 📦 Crate Usage
+
+Add to `Cargo.toml`:
+
+```toml
+[dependencies]
+claw-spawn = { version = "0.1", default-features = false }
+
+# If you want the embeddable HTTP server/router:
+claw-spawn = { version = "0.1", features = ["server"] }
 ```
 
 ## 🎯 API Usage Examples

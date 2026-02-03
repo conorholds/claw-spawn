@@ -5,7 +5,10 @@ edition = "2021"
 authors = ["Cedros Team"]
 description = "Digital Ocean VPS provisioning and OpenClaw bot orchestration"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/cedros/claw-spawn"
+repository = "https://github.com/conorholds/claw-spawn"
+readme = "README.md"
+keywords = ["digitalocean", "provisioning", "axum", "postgres", "orchestration"]
+categories = ["web-programming::http-server"]
 
 [features]
 default = ["server"]
