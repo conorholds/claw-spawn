@@ -19,18 +19,23 @@
 - **Status:** Complete
 - **Completion Note:** Implemented registration token validation. Token is generated and stored when bot is spawned. register_bot handler now validates token against database using get_by_id_with_token(). Returns 401 for invalid/missing tokens. Migration 002_add_registration_token.sql adds the column.
 
-### [ ] CRIT-002: Race Condition - Account Limit Check Not Atomic
+### [x] CRIT-002: Race Condition - Account Limit Check Not Atomic
 - **File:** `src/application/provisioning.rs:74-91`
 - **Issue:** Account limit check queries then counts, allowing concurrent requests to exceed limits
 - **Fix:**
-  - Add atomic counter table `account_bot_limits`
-  - Use UPDATE with check: `current_count < max_count`
-  - Or use database constraint with unique index
+  - Created migration `003_account_bot_counters.sql` with atomic counter table
+  - Added SQL functions `increment_bot_counter()` and `decrement_bot_counter()`
+  - Updated `BotRepository` trait with `increment_bot_counter()` and `decrement_bot_counter()` methods
+  - Implemented methods in `PostgresBotRepository` with atomic SQL operations
+  - Modified `create_bot()` to use atomic counter instead of query+count
+  - Modified `destroy_bot()` to decrement counter on successful destruction
+  - Added triggers to auto-initialize counter on account creation and update on max_bots change
 - **Test Plan:**
   - Set account limit to 1
   - Send 10 concurrent create_bot requests
   - Verify only 1 succeeds, 9 get AccountLimitReached
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Atomic counter prevents TOCTOU race condition. Counter is updated atomically with limit check in single SQL operation. Cleanup on failure ensures counter consistency.
 
 ### [x] CRIT-003: State Inconsistency - Accounts Never Persisted
 - **File:** `src/main.rs:123-139`
@@ -62,18 +67,21 @@
 - **Status:** Complete
 - **Completion Note:** Build successful. HTTP client now has 30s request timeout, 10s connect timeout, and 90s pool idle timeout.
 
-### [ ] CRIT-005: Resource Leak - Droplets Orphaned on Partial Failure
+### [x] CRIT-005: Resource Leak - Droplets Orphaned on Partial Failure
 - **File:** `src/application/provisioning.rs:150-180`
 - **Issue:** Droplet created in DO, but if DB operations fail, droplet is untracked
 - **Fix:**
-  - Implement compensating transaction pattern
-  - If DB persist fails, destroy DO droplet
-  - Log cleanup attempts
+  - Modified `spawn_bot()` to use compensating transaction pattern
+  - Create DO droplet first, then attempt DB persistence
+  - If DB operations fail, immediately destroy the droplet via DO API
+  - Log cleanup success/failure for monitoring orphaned resources
+  - Update bot status to Error on persistence failure
 - **Test Plan:**
   - Mock DB to fail after DO creation
   - Verify droplet is destroyed in DO
   - Verify error is returned to caller
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Implements proper resource cleanup. Droplet is created first, then DB operations are attempted. On failure, the droplet is destroyed and appropriate error logs are generated. Prevents orphaned resources in DigitalOcean.
 
 ### [x] CRIT-006: Hardcoded Control Plane URL
 - **File:** `src/application/provisioning.rs:202`
@@ -89,17 +97,22 @@
 - **Status:** Complete
 - **Completion Note:** Control plane URL is now configurable via CEDROS_CONTROL_PLANE_URL environment variable. Default remains https://api.cedros.io for backwards compatibility.
 
-### [ ] CRIT-007: Duplicate Config Version Race Condition
+### [x] CRIT-007: Duplicate Config Version Race Condition
 - **File:** `src/application/lifecycle.rs:82-86`
 - **Issue:** get_next_version() queries max then increments - not atomic
 - **Fix:**
-  - Use database sequence for atomic increment
-  - Or use RETURNING clause with INSERT
+  - Created migration `004_config_version_sequence.sql` with advisory lock-based function
+  - Added SQL function `get_next_config_version_atomic()` using `pg_advisory_xact_lock()`
+  - Updated `ConfigRepository` trait with `get_next_version_atomic()` method
+  - Implemented method in `PostgresConfigRepository` calling the atomic SQL function
+  - Modified `create_bot_config()` in lifecycle.rs to use atomic version generation
+  - Removed old non-atomic `get_next_version()` method
 - **Test Plan:**
   - Send 5 concurrent config updates
   - Verify all versions are unique (1,2,3,4,5)
   - No duplicates allowed
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Advisory locks ensure exclusive access per-bot during version generation. Lock is automatically released at transaction end. Prevents duplicate version numbers under concurrent config updates.
 
 ## HIGH SEVERITY
 
