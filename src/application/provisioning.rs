@@ -16,8 +16,8 @@ use uuid::Uuid;
 const MAX_BOT_NAME_LENGTH: usize = 64;
 
 /// REL-001: Retry configuration for compensating transactions
-const RETRY_ATTEMPTS: u32 = 3;
-const RETRY_DELAYS_MS: [u64; 3] = [100, 200, 400];
+const RETRY_ATTEMPTS: usize = 3;
+const RETRY_DELAYS_MS: [u64; RETRY_ATTEMPTS - 1] = [100, 200];
 
 /// REL-001: Retry an async operation with exponential backoff
 /// Logs each retry attempt with structured context
@@ -31,38 +31,38 @@ where
     Fut: std::future::Future<Output = Result<T, E>>,
     E: std::fmt::Display,
 {
-    for (attempt, delay_ms) in RETRY_DELAYS_MS.iter().enumerate() {
+    for attempt in 0..RETRY_ATTEMPTS {
         match f().await {
             Ok(result) => return Ok(result),
             Err(e) => {
                 let attempt_num = attempt + 1;
+                if attempt_num >= RETRY_ATTEMPTS {
+                    error!(
+                        bot_id = %bot_id,
+                        operation = %operation_name,
+                        attempts = RETRY_ATTEMPTS,
+                        error = %e,
+                        "All retry attempts exhausted"
+                    );
+                    return Err(e);
+                }
+
+                let delay_ms = RETRY_DELAYS_MS[attempt];
                 warn!(
                     bot_id = %bot_id,
                     operation = %operation_name,
                     attempt = attempt_num,
                     max_attempts = RETRY_ATTEMPTS,
                     error = %e,
-                    "Operation failed, will retry after {}ms", delay_ms
+                    "Operation failed, will retry after {}ms",
+                    delay_ms
                 );
-                sleep(Duration::from_millis(*delay_ms)).await;
+                sleep(Duration::from_millis(delay_ms)).await;
             }
         }
     }
 
-    // Final attempt without delay
-    match f().await {
-        Ok(result) => Ok(result),
-        Err(e) => {
-            error!(
-                bot_id = %bot_id,
-                operation = %operation_name,
-                attempts = RETRY_ATTEMPTS,
-                error = %e,
-                "All retry attempts exhausted"
-            );
-            Err(e)
-        }
-    }
+    unreachable!("retry loop returns on success or final failure")
 }
 
 /// MED-005: Sanitize user-provided bot name to prevent injection/truncation issues
@@ -124,6 +124,7 @@ where
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Default)]
     struct NoopAccountRepo;
@@ -328,6 +329,31 @@ mod tests {
 
         let embedded = include_str!("../../scripts/openclaw-bootstrap.sh");
         assert!(!embedded.lines().any(|l| l.trim() == "set -x"));
+    }
+
+    struct TestErr;
+    impl std::fmt::Display for TestErr {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "test error")
+        }
+    }
+
+    #[tokio::test]
+    async fn f004_retry_with_backoff_uses_exact_attempt_count() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls2 = calls.clone();
+
+        let res: Result<(), TestErr> = retry_with_backoff("test_op", Uuid::nil(), move || {
+            let calls3 = calls2.clone();
+            async move {
+                calls3.fetch_add(1, Ordering::SeqCst);
+                Err(TestErr)
+            }
+        })
+        .await;
+
+        assert!(res.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), RETRY_ATTEMPTS);
     }
 }
 

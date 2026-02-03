@@ -39,7 +39,7 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Enforced Bearer auth on bot-agent endpoints using `extract_bearer_token`; added unit tests in `src/main.rs`; verified via `cargo test`
 
-- [ ] F-004 Fix retry attempt accounting in provisioning backoff helper
+- [x] F-004 Fix retry attempt accounting in provisioning backoff helper
   - Files: `src/application/provisioning.rs`
   - Planned fix:
     - Ensure retry helper runs exactly `RETRY_ATTEMPTS` times
@@ -47,6 +47,8 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Test plan:
     - Add a unit test that counts closure invocations
     - `cargo test`
+  - Completed:
+    - Made retries run exactly `RETRY_ATTEMPTS` with sleeps only between attempts; added `f004_retry_with_backoff_uses_exact_attempt_count`; verified via `cargo test`
 
 - [ ] F-005 Reject invalid enum-like inputs instead of silently defaulting
   - Files: `src/main.rs`
