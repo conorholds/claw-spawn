@@ -105,7 +105,7 @@ The Docker setup includes:
 | `CLAW_SERVER_HOST` | No | `0.0.0.0` | Server bind address |
 | `CLAW_SERVER_PORT` | No | `8080` | Server port |
 | `CLAW_OPENCLAW_IMAGE` | No | `ubuntu-22-04-x64` | DO droplet image |
-| `CLAW_CONTROL_PLANE_URL` | No | `https://api.cedros.io` | Bot control-plane base URL |
+| `CLAW_CONTROL_PLANE_URL` | No | `https://api.example.com` | Bot control-plane base URL |
 | `CLAW_CUSTOMIZER_REPO_URL` | No | `https://github.com/janebot2026/janebot-cli.git` | Public git repo for workspace customizer |
 | `CLAW_CUSTOMIZER_REF` | No | pinned SHA | Git ref (tag/branch/SHA) to checkout for reproducible bootstrap |
 | `CLAW_CUSTOMIZER_WORKSPACE_DIR` | No | `/opt/openclaw/workspace` | Workspace directory on droplet |

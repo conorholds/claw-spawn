@@ -32,7 +32,7 @@ impl AppConfig {
             .set_default("server_host", "0.0.0.0")?
             .set_default("server_port", 8080)?
             .set_default("openclaw_image", "ubuntu-22-04-x64")?
-            .set_default("control_plane_url", "https://api.cedros.io")?
+            .set_default("control_plane_url", "https://api.example.com")?
             // janebot-cli customization defaults (pinned for reproducibility)
             .set_default(
                 "customizer_repo_url",
