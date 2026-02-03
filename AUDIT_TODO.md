@@ -158,16 +158,19 @@
 
 ## MEDIUM SEVERITY
 
-### [ ] MED-001: Dead Code - Unused Bootstrap URL Field
+### [x] MED-001: Dead Code - Unused Bootstrap URL Field
 - **File:** `src/application/provisioning.rs:41`
 - **Issue:** openclaw_bootstrap_url field never used (replaced by hardcoded URL)
 - **Fix:**
-  - Remove field from ProvisioningService struct
-  - Remove from constructor
+  - Removed field from ProvisioningService struct
+  - Removed from constructor parameters
+  - Removed from Self initialization  
+  - Removed from main.rs caller
 - **Test Plan:**
   - Build succeeds
   - No compiler warnings
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. Eliminates dead_code warning. No functional changes.
 
 ### [ ] MED-002: Unsafe String Splitting
 - **File:** `src/application/provisioning.rs:136`

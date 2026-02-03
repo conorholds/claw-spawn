@@ -38,7 +38,6 @@ where
     config_repo: Arc<C>,
     droplet_repo: Arc<D>,
     encryption: Arc<SecretsEncryption>,
-    openclaw_bootstrap_url: String,
     openclaw_image: String,
 }
 
@@ -56,7 +55,6 @@ where
         config_repo: Arc<C>,
         droplet_repo: Arc<D>,
         encryption: Arc<SecretsEncryption>,
-        openclaw_bootstrap_url: String,
         openclaw_image: String,
     ) -> Self {
         Self {
@@ -66,7 +64,6 @@ where
             config_repo,
             droplet_repo,
             encryption,
-            openclaw_bootstrap_url,
             openclaw_image,
         }
     }

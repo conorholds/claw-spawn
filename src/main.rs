@@ -79,7 +79,6 @@ async fn main() -> anyhow::Result<()> {
         config_repo.clone(),
         droplet_repo.clone(),
         encryption,
-        config.openclaw_bootstrap_url,
         config.openclaw_image,
     ));
 
