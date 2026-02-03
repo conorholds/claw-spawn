@@ -12,6 +12,7 @@ Just run `make` and you're ready to go:
 
 ```bash
 # Clone the repository
+git clone https://github.com/conorholds/claw-spawn.git
 cd claw-spawn
 
 # Run everything (creates .env, sets up DB, runs migrations, builds, and starts server)
@@ -150,9 +151,14 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
+# Core library only (no Axum server/router)
 claw-spawn = { version = "0.1", default-features = false }
+```
 
-# If you want the embeddable HTTP server/router:
+Or, if you want the embeddable HTTP server/router:
+
+```toml
+[dependencies]
 claw-spawn = { version = "0.1", features = ["server"] }
 ```
 
@@ -273,7 +279,7 @@ curl -X POST http://localhost:8080/bots/{bot_id}/actions -d '{"action": "destroy
 
 ## 📖 Documentation
 
-- **Setup Guide**: See [Setup Instructions](#setup-instructions) above
+- **Setup**: See [Super Quick Start](#-super-quick-start-one-command) and [Manual Setup](#-manual-setup-if-you-prefer)
 - **API Reference**: See [API Usage Examples](#api-usage-examples)
 - **Architecture**: See [Architecture](#architecture) section
 
@@ -347,4 +353,4 @@ use claw_spawn::{
 
 ## 📄 License
 
-MIT OR Apache-2.0
+MIT
