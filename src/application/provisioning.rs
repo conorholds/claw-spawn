@@ -39,6 +39,7 @@ where
     droplet_repo: Arc<D>,
     encryption: Arc<SecretsEncryption>,
     openclaw_image: String,
+    control_plane_url: String,
 }
 
 impl<A, B, C, D> ProvisioningService<A, B, C, D>
@@ -56,6 +57,7 @@ where
         droplet_repo: Arc<D>,
         encryption: Arc<SecretsEncryption>,
         openclaw_image: String,
+        control_plane_url: String,
     ) -> Self {
         Self {
             do_client,
@@ -65,6 +67,7 @@ where
             droplet_repo,
             encryption,
             openclaw_image,
+            control_plane_url,
         }
     }
 
@@ -186,6 +189,7 @@ where
         // Read the bootstrap script and prepend environment variables
         let bootstrap_script = include_str!("../../scripts/openclaw-bootstrap.sh");
         
+        // CRIT-006: Use configured control plane URL instead of hardcoded value
         format!(
             r##"#!/bin/bash
 # OpenClaw Bot Bootstrap for Bot {}
@@ -202,7 +206,7 @@ export CONTROL_PLANE_URL="{}"
             bot_id,
             registration_token,
             bot_id,
-            "https://api.cedros.io",
+            self.control_plane_url,
             bootstrap_script
         )
     }

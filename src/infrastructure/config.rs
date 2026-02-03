@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub server_port: u16,
     pub openclaw_image: String,
     pub openclaw_bootstrap_url: String,
+    pub control_plane_url: String,
 }
 
 impl AppConfig {
@@ -25,6 +26,7 @@ impl AppConfig {
                 "openclaw_bootstrap_url",
                 "https://install.openclaw.dev/bootstrap.sh",
             )?
+            .set_default("control_plane_url", "https://api.cedros.io")?
             .build()?;
 
         config.try_deserialize()

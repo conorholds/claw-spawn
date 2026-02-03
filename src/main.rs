@@ -80,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
         droplet_repo.clone(),
         encryption,
         config.openclaw_image,
+        config.control_plane_url,
     ));
 
     let lifecycle = Arc::new(BotLifecycleService::new(
