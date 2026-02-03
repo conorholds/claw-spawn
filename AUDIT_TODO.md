@@ -309,16 +309,19 @@
 
 ## RELIABILITY ISSUES
 
-### [ ] REL-001: No Compensating Transaction for Destroy
-- **File:** `src/application/provisioning.rs:216-234`
+### [x] REL-001: Compensating Transaction for Destroy
+- **File:** `src/application/provisioning.rs:315-325`
 - **Issue:** If destroy_droplet succeeds but DB update fails, inconsistency
 - **Fix:**
-  - Retry DB update on failure
-  - Or mark for cleanup later
+  - Added `retry_with_backoff()` helper function with exponential backoff (100ms, 200ms, 400ms)
+  - 3 retry attempts with structured logging for each attempt
+  - Applied retry logic to all DB operations in destroy_bot(): update_droplet, delete, mark_destroyed, decrement_bot_counter
+  - Logs include bot_id, account_id, droplet_id context for monitoring
 - **Test Plan:**
   - Mock DB failure during destroy
   - Verify eventual consistency
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. All destroy operations now use retry logic. Structured logging includes operation name and attempt count for each retry.
 
 ### [x] REL-002: No Retry Logic for DO API Calls
 - **File:** `src/infrastructure/digital_ocean.rs`
@@ -335,16 +338,20 @@
 - **Status:** Complete
 - **Completion Note:** Build successful. All 5 DO API methods (create_droplet, get_droplet, destroy_droplet, shutdown_droplet, reboot_droplet) now have retry logic with exponential backoff.
 
-### [ ] REL-003: Missing Error Context in Logs
-- **File:** Multiple
-- **Issue:** Errors logged without context (bot_id, account_id)
+### [x] REL-003: Structured Logging with Context
+- **File:** `src/application/provisioning.rs`
+- **Issue:** Errors logged without context (bot_id, account_id, droplet_id)
 - **Fix:**
-  - Add structured logging with fields
-  - Use tracing spans
+  - Added `tracing::Span::current().record()` for structured fields
+  - Added `bot_id = %bot_id`, `account_id = %account_id`, `droplet_id = droplet_id` to all log messages
+  - Used format: `info!(bot_id = %bot_id, "message")`
+  - Applied to create_bot(), spawn_bot(), destroy_bot() operations
+  - Logs now include context for debugging and monitoring
 - **Test Plan:**
   - Trigger errors
   - Verify logs contain context
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. All major operations now use structured logging with bot_id, account_id, and droplet_id fields. Enables better observability and debugging.
 
 ## CLEANUP / MAINTAINABILITY
 
@@ -363,16 +370,23 @@
 - **Status:** Complete
 - **Completion Note:** Build successful. All 27 async repository methods now have `#[must_use]` attribute to prevent accidentally ignoring Result return values.
 
-### [ ] CLEAN-002: Replace String-based Status with Enums
+### [~] CLEAN-002: Replace String-based Status with Enums
 - **File:** Database layer
-- **Issue:** Status stored as strings, not type-safe
+- **Issue:** Status stored as strings (VARCHAR), not type-safe
 - **Fix:**
-  - Create database enum types
-  - Migrate existing data
+  - Create PostgreSQL enum types: `bot_status`, `persona`, `droplet_status`
+  - Add migration to convert existing string values to enums
+  - Update repository layer to use sqlx's type mapping for enums
 - **Test Plan:**
   - All status operations work
-  - Type safety enforced
-- **Status:** Pending
+  - Type safety enforced at database level
+- **Status:** Requires separate migration
+- **Note:** This is a larger change requiring:
+  1. New migration file (005_database_enums.sql)
+  2. Conversion of all existing VARCHAR status fields to enum types
+  3. Repository layer updates to handle PostgreSQL enums
+  4. Test data migration validation
+  **Recommended for separate PR due to complexity and rollback considerations**
 
 ### [x] CLEAN-003: Add Comprehensive Tests
    - **File:** `tests/integration_tests.rs`
@@ -390,16 +404,22 @@
    - **Status:** Complete
    - **Completion Note:** All 10 tests pass. Mock repositories provide isolated testing without database dependencies. Tests cover critical paths including auth, lifecycle, and versioning.
 
-### [ ] CLEAN-004: Add API Documentation
-- **File:** Documentation
+### [x] CLEAN-004: Add API Documentation
+- **File:** `src/main.rs`
 - **Issue:** No OpenAPI spec or detailed docs
 - **Fix:**
-  - Add utoipa for OpenAPI generation
-  - Document all endpoints
+  - Added utoipa and utoipa-swagger-ui dependencies to Cargo.toml
+  - Created `ApiDoc` struct with `#[derive(OpenApi)]` for OpenAPI generation
+  - Added `#[utoipa::path()]` annotations to all 11 handlers
+  - Documented request/response schemas with `#[derive(ToSchema)]`
+  - Added Swagger UI at `/docs` endpoint
+  - OpenAPI spec served at `/api-docs/openapi.json`
+  - Added comprehensive API documentation with descriptions, examples, and response codes
 - **Test Plan:**
   - Generate OpenAPI spec
   - Verify all endpoints documented
-- **Status:** Pending
+- **Status:** Complete
+- **Completion Note:** Build successful. API documentation available at `/docs`. OpenAPI spec includes all endpoints with proper request/response types and examples.
 
 ### [x] CLEAN-005: Add Health Check for DB
 - **File:** `src/main.rs:101-103`

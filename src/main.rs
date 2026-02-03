@@ -20,6 +20,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tracing::{error, info};
+use utoipa::{IntoParams, OpenApi, ToSchema};
+use utoipa_swagger_ui::SwaggerUi;
 use uuid::Uuid;
 
 mod config_repo;
@@ -47,6 +49,49 @@ struct AppState {
     provisioning: Arc<ProvisioningServiceType>,
     lifecycle: Arc<BotLifecycleServiceType>,
 }
+
+/// CLEAN-004: OpenAPI documentation structure
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        health_check,
+        create_account,
+        get_account,
+        list_bots,
+        create_bot,
+        get_bot,
+        get_bot_config,
+        bot_action,
+        register_bot,
+        get_desired_config,
+        acknowledge_config,
+        record_heartbeat,
+    ),
+    components(
+        schemas(
+            CreateAccountRequest,
+            CreateBotRequest,
+            BotActionRequest,
+            RegisterBotRequest,
+            AckConfigRequest,
+            BotResponse,
+            HealthResponse,
+        )
+    ),
+    tags(
+        (name = "Health", description = "Health check endpoints"),
+        (name = "Accounts", description = "Account management endpoints"),
+        (name = "Bots", description = "Bot management and lifecycle endpoints"),
+        (name = "Configuration", description = "Bot configuration endpoints"),
+    ),
+    info(
+        title = "Cedros Open Spawn API",
+        version = "0.1.0",
+        description = "API for managing trading bot provisioning and lifecycle",
+        license(name = "MIT OR Apache-2.0")
+    )
+)]
+struct ApiDoc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -109,37 +154,80 @@ async fn main() -> anyhow::Result<()> {
         .route("/bot/:id/config", get(get_desired_config))
         .route("/bot/:id/config_ack", post(acknowledge_config))
         .route("/bot/:id/heartbeat", post(record_heartbeat))
+        // CLEAN-004: Swagger UI for OpenAPI documentation
+        .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", config.server_host, config.server_port)).await?;
+    info!("Server running at http://{}:{}", config.server_host, config.server_port);
+    info!("API documentation available at http://{}:{}/docs", config.server_host, config.server_port);
     axum::serve(listener, app).await?;
 
     Ok(())
 }
 
+/// Health check response
+#[derive(Serialize, ToSchema)]
+struct HealthResponse {
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+/// Health check endpoint
+/// 
+/// Verifies database connectivity and returns service health status.
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "Health",
+    responses(
+        (status = 200, description = "Service is healthy", body = HealthResponse),
+        (status = 503, description = "Service is unhealthy", body = HealthResponse)
+    )
+)]
 async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
     // CLEAN-005: Query DB to verify connectivity
     match sqlx::query("SELECT 1").fetch_one(&state.pool).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "healthy"}))),
+        Ok(_) => (
+            StatusCode::OK, 
+            Json(HealthResponse { status: "healthy".to_string(), error: None })
+        ),
         Err(e) => {
             error!("Health check failed: DB connectivity issue: {}", e);
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({
-                    "status": "unhealthy",
-                    "error": "Database connectivity failed"
-                })),
+                Json(HealthResponse { 
+                    status: "unhealthy".to_string(), 
+                    error: Some("Database connectivity failed".to_string()) 
+                }),
             )
         }
     }
 }
 
-#[derive(Deserialize)]
+/// Create account request
+#[derive(Deserialize, ToSchema)]
 struct CreateAccountRequest {
+    #[schema(example = "user-123")]
     external_id: String,
+    #[schema(example = "pro")]
     tier: String,
 }
 
+/// Create a new account
+/// 
+/// Creates a new account with the specified tier and returns the account ID.
+#[utoipa::path(
+    post,
+    path = "/accounts",
+    tag = "Accounts",
+    request_body = CreateAccountRequest,
+    responses(
+        (status = 201, description = "Account created successfully", body = Object),
+        (status = 500, description = "Failed to create account", body = Object)
+    )
+)]
 async fn create_account(
     State(state): State<AppState>,
     Json(req): Json<CreateAccountRequest>,
@@ -165,6 +253,20 @@ async fn create_account(
     (StatusCode::CREATED, Json(serde_json::json!({"id": account.id })))
 }
 
+/// Get account by ID
+/// 
+/// Retrieves account information by ID.
+#[utoipa::path(
+    get,
+    path = "/accounts/{id}",
+    tag = "Accounts",
+    params(
+        ("id" = Uuid, Path, description = "Account ID")
+    ),
+    responses(
+        (status = 501, description = "Not implemented")
+    )
+)]
 async fn get_account(
     State(_state): State<AppState>,
     Path(_id): Path<Uuid>,
@@ -175,11 +277,15 @@ async fn get_account(
 /// PERF-002: Pagination parameters for list endpoints
 /// - limit: Number of items per page (default: 100, max: 1000)
 /// - offset: Number of items to skip (default: 0)
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, IntoParams, ToSchema)]
 struct PaginationParams {
+    /// Number of items per page (default: 100, max: 1000)
     #[serde(default = "default_limit")]
+    #[param(default = 100, maximum = 1000)]
     limit: i64,
+    /// Number of items to skip (default: 0)
     #[serde(default)]
+    #[param(default = 0)]
     offset: i64,
 }
 
@@ -189,6 +295,22 @@ fn default_limit() -> i64 {
 
 const MAX_PAGINATION_LIMIT: i64 = 1000;
 
+/// List bots for an account
+/// 
+/// Returns a paginated list of bots belonging to the specified account.
+#[utoipa::path(
+    get,
+    path = "/accounts/{id}/bots",
+    tag = "Bots",
+    params(
+        ("id" = Uuid, Path, description = "Account ID"),
+        PaginationParams
+    ),
+    responses(
+        (status = 200, description = "List of bots", body = [BotResponse]),
+        (status = 500, description = "Failed to list bots", body = Object)
+    )
+)]
 async fn list_bots(
     State(state): State<AppState>,
     Path(account_id): Path<Uuid>,
@@ -213,23 +335,53 @@ async fn list_bots(
     }
 }
 
-#[derive(Deserialize)]
+/// Create bot request
+#[derive(Deserialize, ToSchema)]
 struct CreateBotRequest {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     account_id: Uuid,
+    #[schema(example = "My Trading Bot")]
     name: String,
+    #[schema(example = "beginner")]
     persona: String,
+    #[schema(example = "majors")]
     asset_focus: String,
+    #[schema(example = "trend")]
     algorithm: String,
+    #[schema(example = "medium")]
     strictness: String,
+    #[schema(example = false)]
     paper_mode: bool,
+    #[schema(example = 10.0)]
     max_position_size_pct: f64,
+    #[schema(example = 5.0)]
     max_daily_loss_pct: f64,
+    #[schema(example = 20.0)]
     max_drawdown_pct: f64,
+    #[schema(example = 100)]
     max_trades_per_day: i32,
+    #[schema(example = "openai")]
     llm_provider: String,
+    #[schema(example = "sk-...")]
     llm_api_key: String,
 }
 
+/// Create a new bot
+/// 
+/// Creates a new trading bot with the specified configuration and provisions a DigitalOcean droplet.
+#[utoipa::path(
+    post,
+    path = "/bots",
+    tag = "Bots",
+    request_body = CreateBotRequest,
+    responses(
+        (status = 201, description = "Bot created successfully", body = BotResponse),
+        (status = 400, description = "Invalid risk configuration", body = Object),
+        (status = 403, description = "Account limit reached", body = Object),
+        (status = 429, description = "Rate limited by DigitalOcean", body = Object),
+        (status = 500, description = "Failed to create bot", body = Object)
+    )
+)]
 async fn create_bot(
     State(state): State<AppState>,
     Json(req): Json<CreateBotRequest>,
@@ -340,6 +492,21 @@ async fn create_bot(
     }
 }
 
+/// Get bot by ID
+/// 
+/// Retrieves detailed information about a specific bot.
+#[utoipa::path(
+    get,
+    path = "/bots/{id}",
+    tag = "Bots",
+    params(
+        ("id" = Uuid, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 200, description = "Bot found", body = BotResponse),
+        (status = 404, description = "Bot not found", body = Object)
+    )
+)]
 async fn get_bot(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -356,6 +523,22 @@ async fn get_bot(
     }
 }
 
+/// Get bot configuration
+/// 
+/// Retrieves the current configuration for a bot.
+#[utoipa::path(
+    get,
+    path = "/bots/{id}/config",
+    tag = "Configuration",
+    params(
+        ("id" = Uuid, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 200, description = "Configuration found", body = Object),
+        (status = 404, description = "No config found", body = Object),
+        (status = 500, description = "Failed to get config", body = Object)
+    )
+)]
 async fn get_bot_config(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -373,11 +556,31 @@ async fn get_bot_config(
     }
 }
 
-#[derive(Deserialize)]
+/// Bot action request
+#[derive(Deserialize, ToSchema)]
 struct BotActionRequest {
+    /// Action to perform: pause, resume, redeploy, destroy
+    #[schema(example = "pause")]
     action: String,
 }
 
+/// Perform bot action
+/// 
+/// Performs lifecycle actions on a bot: pause, resume, redeploy, or destroy.
+#[utoipa::path(
+    post,
+    path = "/bots/{id}/actions",
+    tag = "Bots",
+    params(
+        ("id" = Uuid, Path, description = "Bot ID")
+    ),
+    request_body = BotActionRequest,
+    responses(
+        (status = 200, description = "Action completed successfully", body = Object),
+        (status = 400, description = "Invalid action", body = Object),
+        (status = 500, description = "Action failed", body = Object)
+    )
+)]
 async fn bot_action(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -397,12 +600,28 @@ async fn bot_action(
             error!("Bot action failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Action failed"})),
+                Json(serde_json::json!({"error": "Action failed" })),
             )
         }
     }
 }
 
+/// Get desired config for bot
+/// 
+/// Retrieves the desired configuration that a bot should apply.
+#[utoipa::path(
+    get,
+    path = "/bot/{id}/config",
+    tag = "Configuration",
+    params(
+        ("id" = Uuid, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 200, description = "Desired config found", body = Object),
+        (status = 404, description = "No desired config", body = Object),
+        (status = 500, description = "Failed to get config", body = Object)
+    )
+)]
 async fn get_desired_config(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -420,11 +639,29 @@ async fn get_desired_config(
     }
 }
 
-#[derive(Deserialize)]
+/// Acknowledge config request
+#[derive(Deserialize, ToSchema)]
 struct AckConfigRequest {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
     config_id: Uuid,
 }
 
+/// Acknowledge configuration
+/// 
+/// Bot acknowledges it has applied a configuration version.
+#[utoipa::path(
+    post,
+    path = "/bot/{id}/config_ack",
+    tag = "Configuration",
+    params(
+        ("id" = Uuid, Path, description = "Bot ID")
+    ),
+    request_body = AckConfigRequest,
+    responses(
+        (status = 200, description = "Config acknowledged", body = Object),
+        (status = 400, description = "Failed to acknowledge config", body = Object)
+    )
+)]
 async fn acknowledge_config(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -439,6 +676,21 @@ async fn acknowledge_config(
     }
 }
 
+/// Record heartbeat
+/// 
+/// Records a heartbeat from a bot to indicate it's alive.
+#[utoipa::path(
+    post,
+    path = "/bot/{id}/heartbeat",
+    tag = "Bots",
+    params(
+        ("id" = Uuid, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 200, description = "Heartbeat recorded", body = Object),
+        (status = 500, description = "Failed to record heartbeat", body = Object)
+    )
+)]
 async fn record_heartbeat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -452,11 +704,27 @@ async fn record_heartbeat(
     }
 }
 
-#[derive(Deserialize)]
+/// Register bot request
+#[derive(Deserialize, ToSchema)]
 struct RegisterBotRequest {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     bot_id: Uuid,
 }
 
+/// Register a bot
+/// 
+/// Bot registration endpoint called by the bot on startup.
+/// Requires a valid registration token in the Authorization header.
+#[utoipa::path(
+    post,
+    path = "/bot/register",
+    tag = "Bots",
+    request_body = RegisterBotRequest,
+    responses(
+        (status = 200, description = "Bot registered successfully", body = Object),
+        (status = 401, description = "Invalid or missing authorization token", body = Object)
+    )
+)]
 async fn register_bot(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -496,18 +764,28 @@ async fn register_bot(
     }
 }
 
-#[derive(Serialize)]
+/// Bot response
+#[derive(Serialize, ToSchema)]
 struct BotResponse {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     id: Uuid,
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
     account_id: Uuid,
+    #[schema(example = "My Trading Bot")]
     name: String,
+    #[schema(example = "beginner")]
     persona: String,
+    #[schema(example = "online")]
     status: String,
+    #[schema(example = 12345678)]
     droplet_id: Option<i64>,
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     desired_config_version_id: Option<Uuid>,
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     applied_config_version_id: Option<Uuid>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    #[schema(format = "date-time")]
     last_heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 

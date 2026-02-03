@@ -9,7 +9,7 @@ repository = "https://github.com/cedros/cedros-open-spawn"
 
 [features]
 default = ["server"]
-server = ["axum", "tokio/rt-multi-thread", "tower-http"]
+server = ["axum", "tokio/rt-multi-thread", "tower-http", "utoipa", "utoipa-swagger-ui"]
 
 [[bin]]
 name = "cedros-open-spawn-server"
@@ -73,6 +73,10 @@ tokio-cron-scheduler = { version = "0.9", optional = true }
 # Server-only deps (optional)
 axum = { version = "0.7", features = ["tokio", "http1", "json"], optional = true }
 tower-http = { version = "0.5", features = ["trace", "cors"], optional = true }
+
+# CLEAN-004: OpenAPI documentation
+utoipa = { version = "4.1", features = ["axum_extras"], optional = true }
+utoipa-swagger-ui = { version = "6.0", features = ["axum"], optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"

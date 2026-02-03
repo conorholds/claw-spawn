@@ -8,11 +8,62 @@ use crate::infrastructure::{
 use rand::RngCore;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{error, info, warn};
+use tokio::time::{sleep, Duration};
+use tracing::{error, info, warn, Span};
 use uuid::Uuid;
 
 /// MED-005: Maximum length for sanitized bot names
 const MAX_BOT_NAME_LENGTH: usize = 64;
+
+/// REL-001: Retry configuration for compensating transactions
+const RETRY_ATTEMPTS: u32 = 3;
+const RETRY_DELAYS_MS: [u64; 3] = [100, 200, 400];
+
+/// REL-001: Retry an async operation with exponential backoff
+/// Logs each retry attempt with structured context
+async fn retry_with_backoff<F, Fut, T, E>(
+    operation_name: &str,
+    bot_id: Uuid,
+    f: F,
+) -> Result<T, E>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = Result<T, E>>,
+    E: std::fmt::Display,
+{
+    for (attempt, delay_ms) in RETRY_DELAYS_MS.iter().enumerate() {
+        match f().await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                let attempt_num = attempt + 1;
+                warn!(
+                    bot_id = %bot_id,
+                    operation = %operation_name,
+                    attempt = attempt_num,
+                    max_attempts = RETRY_ATTEMPTS,
+                    error = %e,
+                    "Operation failed, will retry after {}ms", delay_ms
+                );
+                sleep(Duration::from_millis(*delay_ms)).await;
+            }
+        }
+    }
+
+    // Final attempt without delay
+    match f().await {
+        Ok(result) => Ok(result),
+        Err(e) => {
+            error!(
+                bot_id = %bot_id,
+                operation = %operation_name,
+                attempts = RETRY_ATTEMPTS,
+                error = %e,
+                "All retry attempts exhausted"
+            );
+            Err(e)
+        }
+    }
+}
 
 /// MED-005: Sanitize user-provided bot name to prevent injection/truncation issues
 /// - Removes/replaces special characters
@@ -105,17 +156,33 @@ where
         persona: Persona,
         config: BotConfig,
     ) -> Result<Bot, ProvisioningError> {
+        // REL-003: Structured logging context
+        let span = Span::current();
+        span.record("account_id", account_id.to_string());
+
         let _account = self.account_repo.get_by_id(account_id).await?;
         
         // CRIT-002: Use atomic counter for race-condition-free limit checking
         let (success, _current_count, max_count) = self.bot_repo.increment_bot_counter(account_id).await?;
         
         if !success {
+            warn!(
+                account_id = %account_id,
+                max_bots = max_count,
+                "Account limit reached - cannot create bot"
+            );
             return Err(ProvisioningError::AccountLimitReached(max_count));
         }
 
         // MED-005: Sanitize bot name before use
         let sanitized_name = sanitize_bot_name(&name);
+        info!(
+            account_id = %account_id,
+            original_name = %name,
+            sanitized_name = %sanitized_name,
+            "Creating bot with sanitized name"
+        );
+        
         let mut bot = Bot::new(account_id, sanitized_name, persona);
 
         // CRIT-005: Resource cleanup - if DB operations fail after this point,
@@ -125,7 +192,12 @@ where
         if result.is_err() {
             // Decrement counter on failure to allow retry
             if let Err(e) = self.bot_repo.decrement_bot_counter(account_id).await {
-                error!("Failed to decrement bot counter for account {}: {}", account_id, e);
+                error!(
+                    account_id = %account_id,
+                    bot_id = %bot.id,
+                    error = %e,
+                    "Failed to decrement bot counter after failed creation"
+                );
             }
         }
         
@@ -173,10 +245,21 @@ where
     }
 
     async fn spawn_bot(&self, bot: &mut Bot, config: &StoredBotConfig) -> Result<(), ProvisioningError> {
+        // REL-003: Add structured logging context
+        let span = Span::current();
+        span.record("bot_id", bot.id.to_string());
+        span.record("account_id", bot.account_id.to_string());
+
         self.bot_repo
             .update_status(bot.id, BotStatus::Provisioning)
             .await?;
         bot.status = BotStatus::Provisioning;
+
+        info!(
+            bot_id = %bot.id,
+            account_id = %bot.account_id,
+            "Starting bot spawn process"
+        );
 
         // MED-002: Safe string truncation instead of split
         let id_str = bot.id.to_string();
@@ -202,13 +285,20 @@ where
         let droplet = match self.do_client.create_droplet(droplet_request).await {
             Ok(d) => d,
             Err(DigitalOceanError::RateLimited) => {
-                warn!("Rate limited by DigitalOcean, bot {} will retry", bot.id);
+                warn!(
+                    bot_id = %bot.id,
+                    "Rate limited by DigitalOcean, bot will retry"
+                );
                 self.bot_repo.update_status(bot.id, BotStatus::Pending).await?;
                 bot.status = BotStatus::Pending;
                 return Err(DigitalOceanError::RateLimited.into());
             }
             Err(e) => {
-                error!("Failed to create droplet for bot {}: {}", bot.id, e);
+                error!(
+                    bot_id = %bot.id,
+                    error = %e,
+                    "Failed to create droplet for bot"
+                );
                 self.bot_repo.update_status(bot.id, BotStatus::Error).await?;
                 bot.status = BotStatus::Error;
                 return Err(e.into());
@@ -228,25 +318,37 @@ where
         if let Err(ref e) = db_result {
             // CRIT-005: DB persistence failed - attempt to clean up DO droplet
             error!(
-                "DB persistence failed for bot {} after DO droplet {} created. Attempting cleanup: {}",
-                bot.id, droplet.id, e
+                bot_id = %bot.id,
+                droplet_id = droplet.id,
+                error = %e,
+                "DB persistence failed after DO droplet created. Attempting cleanup"
             );
             
             match self.do_client.destroy_droplet(droplet.id).await {
                 Ok(_) => {
-                    info!("Successfully cleaned up droplet {} for bot {} after DB failure", droplet.id, bot.id);
+                    info!(
+                        bot_id = %bot.id,
+                        droplet_id = droplet.id,
+                        "Successfully cleaned up droplet after DB failure"
+                    );
                 }
                 Err(cleanup_err) => {
                     error!(
-                        "FAILED TO CLEANUP: Droplet {} for bot {} may be orphaned. Error: {}",
-                        droplet.id, bot.id, cleanup_err
+                        bot_id = %bot.id,
+                        droplet_id = droplet.id,
+                        error = %cleanup_err,
+                        "FAILED TO CLEANUP: Droplet may be orphaned"
                     );
                 }
             }
             
             // Update bot status to error since droplet creation failed at persistence stage
             if let Err(status_err) = self.bot_repo.update_status(bot.id, BotStatus::Error).await {
-                error!("Failed to update bot {} status to error: {}", bot.id, status_err);
+                error!(
+                    bot_id = %bot.id,
+                    error = %status_err,
+                    "Failed to update bot status to error"
+                );
             }
             bot.status = BotStatus::Error;
             
@@ -256,8 +358,9 @@ where
         bot.droplet_id = Some(droplet.id);
 
         info!(
-            "Successfully spawned droplet {} for bot {}",
-            droplet.id, bot.id
+            bot_id = %bot.id,
+            droplet_id = droplet.id,
+            "Successfully spawned droplet for bot"
         );
 
         Ok(())
@@ -298,29 +401,118 @@ export CONTROL_PLANE_URL="{}"
     pub async fn destroy_bot(&self, bot_id: Uuid) -> Result<(), ProvisioningError> {
         let bot = self.bot_repo.get_by_id(bot_id).await?;
 
+        // REL-003: Add structured logging span with context
+        let span = Span::current();
+        span.record("bot_id", bot_id.to_string());
+        span.record("account_id", bot.account_id.to_string());
+
         if let Some(droplet_id) = bot.droplet_id {
+            span.record("droplet_id", droplet_id);
+            
             match self.do_client.destroy_droplet(droplet_id).await {
                 Ok(_) => {
-                    info!("Destroyed droplet {} for bot {}", droplet_id, bot_id);
-                    self.droplet_repo.mark_destroyed(droplet_id).await?;
+                    info!(
+                        bot_id = %bot_id,
+                        droplet_id = droplet_id,
+                        "Destroyed droplet for bot"
+                    );
+                    
+                    // REL-001: Retry on failure for compensating transaction
+                    if let Err(e) = retry_with_backoff(
+                        "mark_destroyed",
+                        bot_id,
+                        || self.droplet_repo.mark_destroyed(droplet_id)
+                    ).await {
+                        error!(
+                            bot_id = %bot_id,
+                            droplet_id = droplet_id,
+                            error = %e,
+                            "Failed to mark droplet as destroyed after retries"
+                        );
+                        return Err(e.into());
+                    }
                 }
                 Err(DigitalOceanError::NotFound(_)) => {
-                    warn!("Droplet {} already destroyed or not found", droplet_id);
-                    self.droplet_repo.mark_destroyed(droplet_id).await?;
+                    warn!(
+                        bot_id = %bot_id,
+                        droplet_id = droplet_id,
+                        "Droplet already destroyed or not found"
+                    );
+                    
+                    // REL-001: Retry on failure for compensating transaction
+                    if let Err(e) = retry_with_backoff(
+                        "mark_destroyed",
+                        bot_id,
+                        || self.droplet_repo.mark_destroyed(droplet_id)
+                    ).await {
+                        error!(
+                            bot_id = %bot_id,
+                            droplet_id = droplet_id,
+                            error = %e,
+                            "Failed to mark droplet as destroyed after retries"
+                        );
+                        return Err(e.into());
+                    }
                 }
-                Err(e) => return Err(e.into()),
+                Err(e) => {
+                    error!(
+                        bot_id = %bot_id,
+                        droplet_id = droplet_id,
+                        error = %e,
+                        "Failed to destroy droplet"
+                    );
+                    return Err(e.into());
+                }
             }
         }
 
-        self.bot_repo.update_droplet(bot_id, None).await?;
-        self.bot_repo.delete(bot_id).await?;
-        
-        // CRIT-002: Decrement bot counter when bot is destroyed
-        if let Err(e) = self.bot_repo.decrement_bot_counter(bot.account_id).await {
-            error!("Failed to decrement bot counter for account {}: {}", bot.account_id, e);
+        // REL-001: Retry DB updates with backoff
+        if let Err(e) = retry_with_backoff(
+            "update_droplet",
+            bot_id,
+            || self.bot_repo.update_droplet(bot_id, None)
+        ).await {
+            error!(
+                bot_id = %bot_id,
+                error = %e,
+                "Failed to update bot droplet reference after retries"
+            );
+            return Err(e.into());
         }
 
-        info!("Successfully destroyed bot {}", bot_id);
+        if let Err(e) = retry_with_backoff(
+            "delete_bot",
+            bot_id,
+            || self.bot_repo.delete(bot_id)
+        ).await {
+            error!(
+                bot_id = %bot_id,
+                error = %e,
+                "Failed to delete bot after retries"
+            );
+            return Err(e.into());
+        }
+        
+        // CRIT-002: Decrement bot counter when bot is destroyed
+        // REL-001: Retry counter decrement
+        if let Err(e) = retry_with_backoff(
+            "decrement_bot_counter",
+            bot_id,
+            || self.bot_repo.decrement_bot_counter(bot.account_id)
+        ).await {
+            error!(
+                bot_id = %bot_id,
+                account_id = %bot.account_id,
+                error = %e,
+                "Failed to decrement bot counter after retries - counter may be inconsistent"
+            );
+        }
+
+        info!(
+            bot_id = %bot_id,
+            account_id = %bot.account_id,
+            "Successfully destroyed bot"
+        );
         Ok(())
     }
 
