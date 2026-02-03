@@ -62,7 +62,10 @@ async fn main() -> anyhow::Result<()> {
             .expect("Failed to initialize encryption"),
     );
 
-    let do_client = Arc::new(DigitalOceanClient::new(config.digitalocean_token));
+    let do_client = Arc::new(
+        DigitalOceanClient::new(config.digitalocean_token)
+            .expect("Failed to initialize DigitalOcean client"),
+    );
 
     let account_repo = Arc::new(PostgresAccountRepository::new(pool.clone()));
     let bot_repo = Arc::new(PostgresBotRepository::new(pool.clone()));

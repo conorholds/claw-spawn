@@ -16,6 +16,8 @@ pub enum DigitalOceanError {
     RateLimited,
     #[error("Invalid response: {0}")]
     InvalidResponse(String),
+    #[error("Invalid configuration: {0}")]
+    InvalidConfig(String),
 }
 
 pub struct DigitalOceanClient {
@@ -26,12 +28,18 @@ pub struct DigitalOceanClient {
 }
 
 impl DigitalOceanClient {
-    pub fn new(api_token: String) -> Self {
+    pub fn new(api_token: String) -> Result<Self, DigitalOceanError> {
         let mut headers = header::HeaderMap::new();
-        headers.insert(
-            header::AUTHORIZATION,
-            format!("Bearer {}", api_token).parse().unwrap(),
-        );
+        let auth_value = match header::HeaderValue::from_str(&format!("Bearer {}", api_token)) {
+            Ok(val) => val,
+            Err(e) => {
+                return Err(DigitalOceanError::InvalidConfig(format!(
+                    "Invalid API token format: {}",
+                    e
+                )))
+            }
+        };
+        headers.insert(header::AUTHORIZATION, auth_value);
         headers.insert(
             header::CONTENT_TYPE,
             header::HeaderValue::from_static("application/json"),
@@ -44,13 +52,13 @@ impl DigitalOceanClient {
             .connect_timeout(Duration::from_secs(10))
             .pool_idle_timeout(Duration::from_secs(90))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| DigitalOceanError::InvalidConfig(format!("Failed to create HTTP client: {}", e)))?;
 
-        Self {
+        Ok(Self {
             client,
             api_token,
             base_url: "https://api.digitalocean.com/v2".to_string(),
-        }
+        })
     }
 
     pub async fn create_droplet(
