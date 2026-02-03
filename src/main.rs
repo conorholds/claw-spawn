@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{header::HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -172,11 +172,33 @@ async fn get_account(
     (StatusCode::NOT_IMPLEMENTED, "Get account not implemented")
 }
 
+/// PERF-002: Pagination parameters for list endpoints
+/// - limit: Number of items per page (default: 100, max: 1000)
+/// - offset: Number of items to skip (default: 0)
+#[derive(Deserialize, Debug)]
+struct PaginationParams {
+    #[serde(default = "default_limit")]
+    limit: i64,
+    #[serde(default)]
+    offset: i64,
+}
+
+fn default_limit() -> i64 {
+    100
+}
+
+const MAX_PAGINATION_LIMIT: i64 = 1000;
+
 async fn list_bots(
     State(state): State<AppState>,
     Path(account_id): Path<Uuid>,
+    Query(params): Query<PaginationParams>,
 ) -> impl IntoResponse {
-    match state.lifecycle.list_account_bots(account_id).await {
+    // PERF-002: Clamp limit to max value to prevent abuse
+    let limit = params.limit.min(MAX_PAGINATION_LIMIT).max(1);
+    let offset = params.offset.max(0);
+    
+    match state.lifecycle.list_account_bots(account_id, limit, offset).await {
         Ok(bots) => {
             let bot_responses: Vec<BotResponse> = bots.into_iter().map(|b| b.into()).collect();
             (StatusCode::OK, Json(serde_json::json!(bot_responses)))

@@ -42,6 +42,15 @@ pub trait BotRepository: Send + Sync {
     async fn get_by_id_with_token(&self, id: Uuid, token: &str) -> Result<Bot, RepositoryError>;
     #[must_use]
     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Bot>, RepositoryError>;
+    /// PERF-002: Paginated list of bots for account
+    /// Use limit/offset for pagination instead of loading all bots
+    #[must_use]
+    async fn list_by_account_paginated(
+        &self,
+        account_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Bot>, RepositoryError>;
     /// PERF-001: Count bots for account without fetching all rows
     /// Use SQL COUNT(*) instead of list_by_account().len()
     #[must_use]
@@ -373,6 +382,32 @@ impl BotRepository for PostgresBotRepository {
         .await?;
 
         Ok(count)
+    }
+
+    async fn list_by_account_paginated(
+        &self,
+        account_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Bot>, RepositoryError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, account_id, name, persona, status, droplet_id,
+                   desired_config_version_id, applied_config_version_id,
+                   registration_token, created_at, updated_at, last_heartbeat_at
+            FROM bots
+            WHERE account_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(account_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.iter().map(row_to_bot).collect()
     }
 
     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError> {

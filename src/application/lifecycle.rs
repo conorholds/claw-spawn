@@ -50,8 +50,16 @@ where
         Ok(self.bot_repo.get_by_id_with_token(bot_id, token).await?)
     }
 
-    pub async fn list_account_bots(&self, account_id: Uuid) -> Result<Vec<Bot>, LifecycleError> {
-        Ok(self.bot_repo.list_by_account(account_id).await?)
+    /// PERF-002: List bots with pagination support
+    /// - limit: Maximum number of bots to return
+    /// - offset: Number of bots to skip
+    pub async fn list_account_bots(
+        &self,
+        account_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Bot>, LifecycleError> {
+        Ok(self.bot_repo.list_by_account_paginated(account_id, limit, offset).await?)
     }
 
     pub async fn create_bot_config(
