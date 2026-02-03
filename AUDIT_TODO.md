@@ -160,9 +160,11 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Removed unused `openclaw_bootstrap_url` from `AppConfig` and `.env.example`; verified via `cargo test`
 
-- [ ] F-015 Add minimal CI (fmt/clippy/test)
+- [x] F-015 Add minimal CI (fmt/clippy/test)
   - Files: `.github/workflows/ci.yml` (new)
   - Planned fix:
     - Add GitHub Actions workflow running `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
   - Test plan:
     - Workflow runs green on PR
+  - Completed:
+    - Added `.github/workflows/ci.yml`; verified locally via `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
