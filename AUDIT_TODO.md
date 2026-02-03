@@ -70,13 +70,15 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Test plan:
     - `cargo fmt --check`
 
-- [ ] F-007 Add DB index for account bot pagination ordering
+- [x] F-007 Add DB index for account bot pagination ordering
   - Files: `migrations/*` (new migration)
   - Planned fix:
     - Add index on `bots(account_id, created_at DESC)`
   - Test plan:
     - `cargo test`
     - (Manual) `EXPLAIN ANALYZE` list query
+  - Completed:
+    - Added `migrations/006_idx_bots_account_created_at.sql`; verified via `cargo test`
 
 - [ ] F-008 Add DB index for stale heartbeat scan
   - Files: `migrations/*` (new migration)
