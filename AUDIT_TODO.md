@@ -109,12 +109,14 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Removed stored token field from `DigitalOceanClient`; verified via `cargo test`
 
-- [ ] F-011 Remove/ignore assistant tool metadata from runtime repo
+- [x] F-011 Remove/ignore assistant tool metadata from runtime repo
   - Files: `.claude/**`, `.gemini/**`, `.opencode/**`, `.mcp.json`, `.gitignore`
   - Planned fix:
     - Stop tracking tool config directories/files; add ignore rules
   - Test plan:
     - `git status` clean; `cargo test`
+  - Completed:
+    - Removed tracked `.claude/`, `.gemini/`, `.opencode/`, `.mcp.json`; added ignore rules; verified via `cargo test`
 
 - [ ] F-012 Commit `Cargo.lock` for reproducible builds
   - Files: `.gitignore`, `Cargo.lock`

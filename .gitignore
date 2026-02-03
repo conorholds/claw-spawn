@@ -15,6 +15,12 @@ Cargo.lock
 *.swo
 *~
 
+# Assistant/tool metadata (keep out of runtime repo)
+.claude/
+.gemini/
+.opencode/
+.mcp.json
+
 # OS
 .DS_Store
 Thumbs.db
