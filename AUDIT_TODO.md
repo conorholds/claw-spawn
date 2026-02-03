@@ -28,7 +28,7 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
 
 ## High
 
-- [ ] F-003 Require Bearer token auth for all bot-agent endpoints
+- [x] F-003 Require Bearer token auth for all bot-agent endpoints
   - Files: `src/main.rs`
   - Planned fix:
     - Require `Authorization: Bearer <token>` for `/bot/{id}/config`, `/bot/{id}/config_ack`, `/bot/{id}/heartbeat`
@@ -36,6 +36,8 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Test plan:
     - `cargo test`
     - Add unit tests for header parsing helper
+  - Completed:
+    - Enforced Bearer auth on bot-agent endpoints using `extract_bearer_token`; added unit tests in `src/main.rs`; verified via `cargo test`
 
 - [ ] F-004 Fix retry attempt accounting in provisioning backoff helper
   - Files: `src/application/provisioning.rs`

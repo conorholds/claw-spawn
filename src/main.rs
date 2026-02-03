@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{header::HeaderMap, StatusCode},
+    http::{header, header::HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -29,6 +29,44 @@ mod droplet_repo;
 
 use config_repo::PostgresConfigRepository;
 use droplet_repo::PostgresDropletRepository;
+
+fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .filter(|t| !t.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    #[test]
+    fn f003_extract_bearer_token_happy_path() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Bearer abc123"));
+        assert_eq!(extract_bearer_token(&headers), Some("abc123"));
+    }
+
+    #[test]
+    fn f003_extract_bearer_token_rejects_missing_or_empty() {
+        let headers = HeaderMap::new();
+        assert_eq!(extract_bearer_token(&headers), None);
+
+        let mut headers2 = HeaderMap::new();
+        headers2.insert(header::AUTHORIZATION, HeaderValue::from_static("Bearer "));
+        assert_eq!(extract_bearer_token(&headers2), None);
+    }
+
+    #[test]
+    fn f003_extract_bearer_token_rejects_wrong_scheme() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Basic abc123"));
+        assert_eq!(extract_bearer_token(&headers), None);
+    }
+}
 
 type ProvisioningServiceType = ProvisioningService<
     PostgresAccountRepository,
@@ -618,6 +656,7 @@ async fn bot_action(
     ),
     responses(
         (status = 200, description = "Desired config found", body = Object),
+        (status = 401, description = "Invalid or missing authorization token", body = Object),
         (status = 404, description = "No desired config", body = Object),
         (status = 500, description = "Failed to get config", body = Object)
     )
@@ -625,7 +664,26 @@ async fn bot_action(
 async fn get_desired_config(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
+    // F-003: Require bot registration token for all bot-agent endpoints
+    let token = match extract_bearer_token(&headers) {
+        Some(t) => t,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Missing or invalid authorization token"})),
+            );
+        }
+    };
+
+    if state.lifecycle.get_bot_with_token(id, token).await.is_err() {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Invalid bot ID or registration token"})),
+        );
+    }
+
     match state.lifecycle.get_desired_config(id).await {
         Ok(Some(config)) => (StatusCode::OK, Json(serde_json::json!(config))),
         Ok(None) => (
@@ -659,14 +717,33 @@ struct AckConfigRequest {
     request_body = AckConfigRequest,
     responses(
         (status = 200, description = "Config acknowledged", body = Object),
+        (status = 401, description = "Invalid or missing authorization token", body = Object),
         (status = 400, description = "Failed to acknowledge config", body = Object)
     )
 )]
 async fn acknowledge_config(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    headers: HeaderMap,
     Json(req): Json<AckConfigRequest>,
 ) -> impl IntoResponse {
+    let token = match extract_bearer_token(&headers) {
+        Some(t) => t,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Missing or invalid authorization token"})),
+            );
+        }
+    };
+
+    if state.lifecycle.get_bot_with_token(id, token).await.is_err() {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Invalid bot ID or registration token"})),
+        );
+    }
+
     match state.lifecycle.acknowledge_config(id, req.config_id).await {
         Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "acknowledged"}))),
         Err(_) => (
@@ -688,13 +765,32 @@ async fn acknowledge_config(
     ),
     responses(
         (status = 200, description = "Heartbeat recorded", body = Object),
+        (status = 401, description = "Invalid or missing authorization token", body = Object),
         (status = 500, description = "Failed to record heartbeat", body = Object)
     )
 )]
 async fn record_heartbeat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
+    let token = match extract_bearer_token(&headers) {
+        Some(t) => t,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Missing or invalid authorization token"})),
+            );
+        }
+    };
+
+    if state.lifecycle.get_bot_with_token(id, token).await.is_err() {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Invalid bot ID or registration token"})),
+        );
+    }
+
     match state.lifecycle.record_heartbeat(id).await {
         Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))),
         Err(_) => (
