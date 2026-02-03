@@ -80,13 +80,15 @@ This checklist tracks every issue identified in the end-to-end audit. Each item 
   - Completed:
     - Added `migrations/006_idx_bots_account_created_at.sql`; verified via `cargo test`
 
-- [ ] F-008 Add DB index for stale heartbeat scan
+- [x] F-008 Add DB index for stale heartbeat scan
   - Files: `migrations/*` (new migration)
   - Planned fix:
     - Add index on `bots(status, last_heartbeat_at)`
   - Test plan:
     - `cargo test`
     - (Manual) `EXPLAIN ANALYZE` stale scan
+  - Completed:
+    - Added `migrations/007_idx_bots_status_heartbeat.sql`; verified via `cargo test`
 
 - [ ] F-009 Add DB index for latest config-by-version query
   - Files: `migrations/*` (new migration)
