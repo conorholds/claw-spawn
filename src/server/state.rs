@@ -70,6 +70,14 @@ pub async fn build_state_with_pool(
         config.customizer_skip_cron,
         config.customizer_skip_git,
         config.customizer_skip_heartbeat,
+        config.toolchain_node_major,
+        config.toolchain_install_pnpm,
+        config.toolchain_pnpm_version,
+        config.toolchain_install_rust,
+        config.toolchain_rust_toolchain,
+        config.toolchain_extra_apt_packages,
+        config.toolchain_global_npm_packages,
+        config.toolchain_cargo_crates,
     ));
 
     let lifecycle = Arc::new(BotLifecycleService::new(

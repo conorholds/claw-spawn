@@ -115,6 +115,14 @@ The Docker setup includes:
 | `CLAW_CUSTOMIZER_SKIP_CRON` | No | `true` | Skip OpenClaw cron install at droplet bootstrap |
 | `CLAW_CUSTOMIZER_SKIP_GIT` | No | `true` | Skip git init at droplet bootstrap |
 | `CLAW_CUSTOMIZER_SKIP_HEARTBEAT` | No | `true` | Skip heartbeat install at droplet bootstrap |
+| `CLAW_TOOLCHAIN_NODE_MAJOR` | No | `20` | Node major version installed via NodeSource on droplet (`18`, `20`, etc.) |
+| `CLAW_TOOLCHAIN_INSTALL_PNPM` | No | `true` | Install `pnpm` via corepack on droplet |
+| `CLAW_TOOLCHAIN_PNPM_VERSION` | No | empty | Optional pinned `pnpm` version (example: `9.12.0`) |
+| `CLAW_TOOLCHAIN_INSTALL_RUST` | No | `true` | Install Rust (rustup) for `openclaw` user on droplet |
+| `CLAW_TOOLCHAIN_RUST_TOOLCHAIN` | No | `stable` | Rust toolchain channel/version passed to rustup |
+| `CLAW_TOOLCHAIN_EXTRA_APT_PACKAGES` | No | empty | Space-separated extra apt packages to install during bootstrap |
+| `CLAW_TOOLCHAIN_GLOBAL_NPM_PACKAGES` | No | empty | Space-separated global npm packages to install during bootstrap |
+| `CLAW_TOOLCHAIN_CARGO_CRATES` | No | empty | Space-separated cargo crates to install for `openclaw` user |
 
 ## 🪂 Droplet Bootstrap Notes
 
@@ -123,6 +131,7 @@ The Docker setup includes:
 - Workspace customization (janebot-cli) runs once and writes:
   - Marker: `/opt/openclaw/.customizer_ran`
   - Status: `/opt/openclaw/customizer_status.txt`
+- Droplet bootstrap installs Node (default 20), `pnpm`, and Rust by default; use `CLAW_TOOLCHAIN_*` env vars to customize per deployment.
 
 ## 🧩 Embedded Usage (Integrate Into Larger Axum Server)
 

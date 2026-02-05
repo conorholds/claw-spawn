@@ -126,6 +126,16 @@ where
     customizer_skip_cron: bool,
     customizer_skip_git: bool,
     customizer_skip_heartbeat: bool,
+
+    // Droplet toolchain/bootstrap customization
+    toolchain_node_major: u8,
+    toolchain_install_pnpm: bool,
+    toolchain_pnpm_version: String,
+    toolchain_install_rust: bool,
+    toolchain_rust_toolchain: String,
+    toolchain_extra_apt_packages: String,
+    toolchain_global_npm_packages: String,
+    toolchain_cargo_crates: String,
 }
 
 #[cfg(test)]
@@ -336,6 +346,14 @@ mod tests {
             true,
             true,
             true,
+            20,
+            true,
+            "".to_string(),
+            true,
+            "stable".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
         );
 
         let bot_id = Uuid::new_v4();
@@ -344,6 +362,67 @@ mod tests {
 
         let embedded = include_str!("../../scripts/openclaw-bootstrap.sh");
         assert!(!embedded.lines().any(|l| l.trim() == "set -x"));
+    }
+
+    #[test]
+    fn f002_user_data_exports_customizer_and_toolchain_values() {
+        let encryption = Arc::new(
+            SecretsEncryption::new("YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=")
+                .expect("valid test key"),
+        );
+        let do_client = Arc::new(DigitalOceanClient::new("test-token".to_string()).unwrap());
+
+        let svc: ProvisioningService<
+            NoopAccountRepo,
+            NoopBotRepo,
+            NoopConfigRepo,
+            NoopDropletRepo,
+        > = ProvisioningService::new(
+            do_client,
+            Arc::new(NoopAccountRepo::default()),
+            Arc::new(NoopBotRepo::default()),
+            Arc::new(NoopConfigRepo::default()),
+            Arc::new(NoopDropletRepo::default()),
+            encryption,
+            "ubuntu-22-04-x64".to_string(),
+            "https://control.example".to_string(),
+            "https://example.com/customizer.git".to_string(),
+            "custom-ref".to_string(),
+            "/tmp/workspace".to_string(),
+            "AgentX".to_string(),
+            "OwnerY".to_string(),
+            false,
+            true,
+            false,
+            true,
+            20,
+            true,
+            "9.12.0".to_string(),
+            true,
+            "stable".to_string(),
+            "ripgrep fd-find".to_string(),
+            "@openclaw/special-cli".to_string(),
+            "cargo-binstall".to_string(),
+        );
+
+        let bot_id = Uuid::new_v4();
+        let user_data = svc.test_only_generate_user_data("reg-token", bot_id);
+        assert!(
+            user_data.contains("export CUSTOMIZER_REPO_URL=\"https://example.com/customizer.git\"")
+        );
+        assert!(user_data.contains("export CUSTOMIZER_REF=\"custom-ref\""));
+        assert!(user_data.contains("export TOOLCHAIN_NODE_MAJOR=\"20\""));
+        assert!(user_data.contains("export TOOLCHAIN_INSTALL_PNPM=\"true\""));
+        assert!(user_data.contains("export TOOLCHAIN_PNPM_VERSION=\"9.12.0\""));
+        assert!(user_data.contains("export TOOLCHAIN_INSTALL_RUST=\"true\""));
+        assert!(user_data.contains("export TOOLCHAIN_RUST_TOOLCHAIN=\"stable\""));
+        assert!(user_data.contains("export TOOLCHAIN_EXTRA_APT_PACKAGES=\"ripgrep fd-find\""));
+        assert!(
+            user_data.contains("export TOOLCHAIN_GLOBAL_NPM_PACKAGES=\"@openclaw/special-cli\"")
+        );
+        assert!(user_data.contains("export TOOLCHAIN_CARGO_CRATES=\"cargo-binstall\""));
+        assert!(user_data.contains("# Start of embedded bootstrap script"));
+        assert!(user_data.contains("# OpenClaw Bot Bootstrap Script"));
     }
 
     struct TestErr;
@@ -399,6 +478,14 @@ where
         customizer_skip_cron: bool,
         customizer_skip_git: bool,
         customizer_skip_heartbeat: bool,
+        toolchain_node_major: u8,
+        toolchain_install_pnpm: bool,
+        toolchain_pnpm_version: String,
+        toolchain_install_rust: bool,
+        toolchain_rust_toolchain: String,
+        toolchain_extra_apt_packages: String,
+        toolchain_global_npm_packages: String,
+        toolchain_cargo_crates: String,
     ) -> Self {
         Self {
             do_client,
@@ -419,6 +506,14 @@ where
             customizer_skip_cron,
             customizer_skip_git,
             customizer_skip_heartbeat,
+            toolchain_node_major,
+            toolchain_install_pnpm,
+            toolchain_pnpm_version,
+            toolchain_install_rust,
+            toolchain_rust_toolchain,
+            toolchain_extra_apt_packages,
+            toolchain_global_npm_packages,
+            toolchain_cargo_crates,
         }
     }
 
@@ -686,6 +781,16 @@ export CUSTOMIZER_SKIP_CRON="{}"
 export CUSTOMIZER_SKIP_GIT="{}"
 export CUSTOMIZER_SKIP_HEARTBEAT="{}"
 
+# Toolchain/bootstrap customization
+export TOOLCHAIN_NODE_MAJOR="{}"
+export TOOLCHAIN_INSTALL_PNPM="{}"
+export TOOLCHAIN_PNPM_VERSION="{}"
+export TOOLCHAIN_INSTALL_RUST="{}"
+export TOOLCHAIN_RUST_TOOLCHAIN="{}"
+export TOOLCHAIN_EXTRA_APT_PACKAGES="{}"
+export TOOLCHAIN_GLOBAL_NPM_PACKAGES="{}"
+export TOOLCHAIN_CARGO_CRATES="{}"
+
 # Start of embedded bootstrap script
 {}
 "##,
@@ -693,7 +798,6 @@ export CUSTOMIZER_SKIP_HEARTBEAT="{}"
             registration_token,
             bot_id,
             self.control_plane_url,
-            bootstrap_script,
             self.customizer_repo_url,
             self.customizer_ref,
             self.customizer_workspace_dir,
@@ -702,7 +806,16 @@ export CUSTOMIZER_SKIP_HEARTBEAT="{}"
             self.customizer_skip_qmd,
             self.customizer_skip_cron,
             self.customizer_skip_git,
-            self.customizer_skip_heartbeat
+            self.customizer_skip_heartbeat,
+            self.toolchain_node_major,
+            self.toolchain_install_pnpm,
+            self.toolchain_pnpm_version,
+            self.toolchain_install_rust,
+            self.toolchain_rust_toolchain,
+            self.toolchain_extra_apt_packages,
+            self.toolchain_global_npm_packages,
+            self.toolchain_cargo_crates,
+            bootstrap_script
         )
     }
 

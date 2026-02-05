@@ -26,6 +26,16 @@ CUSTOMIZER_SKIP_CRON="${CUSTOMIZER_SKIP_CRON:-true}"
 CUSTOMIZER_SKIP_GIT="${CUSTOMIZER_SKIP_GIT:-true}"
 CUSTOMIZER_SKIP_HEARTBEAT="${CUSTOMIZER_SKIP_HEARTBEAT:-true}"
 
+# Toolchain/bootstrap customization
+TOOLCHAIN_NODE_MAJOR="${TOOLCHAIN_NODE_MAJOR:-20}"
+TOOLCHAIN_INSTALL_PNPM="${TOOLCHAIN_INSTALL_PNPM:-true}"
+TOOLCHAIN_PNPM_VERSION="${TOOLCHAIN_PNPM_VERSION:-}"
+TOOLCHAIN_INSTALL_RUST="${TOOLCHAIN_INSTALL_RUST:-true}"
+TOOLCHAIN_RUST_TOOLCHAIN="${TOOLCHAIN_RUST_TOOLCHAIN:-stable}"
+TOOLCHAIN_EXTRA_APT_PACKAGES="${TOOLCHAIN_EXTRA_APT_PACKAGES:-}"
+TOOLCHAIN_GLOBAL_NPM_PACKAGES="${TOOLCHAIN_GLOBAL_NPM_PACKAGES:-}"
+TOOLCHAIN_CARGO_CRATES="${TOOLCHAIN_CARGO_CRATES:-}"
+
 echo "=== OpenClaw Bot Setup Starting ==="
 echo "Bot ID: $BOT_ID"
 echo "Control Plane: $CONTROL_PLANE_URL"
@@ -49,7 +59,7 @@ apt-get install -y \
     apt-transport-https \
     jq
 
-# Install Node.js 18+ (janebot-cli requires node >=18)
+# Install Node.js (janebot-cli requires node >=18; default is 20 LTS)
 echo "=== Installing Node.js (for janebot-cli) ==="
 if command -v node >/dev/null 2>&1; then
     NODE_MAJOR=$(node -v 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/')
@@ -57,11 +67,33 @@ else
     NODE_MAJOR=0
 fi
 
-if [ "${NODE_MAJOR:-0}" -lt 18 ]; then
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+if [ "${NODE_MAJOR:-0}" -lt "${TOOLCHAIN_NODE_MAJOR}" ]; then
+    curl -fsSL "https://deb.nodesource.com/setup_${TOOLCHAIN_NODE_MAJOR}.x" | bash -
     apt-get install -y nodejs
 else
     echo "Node already present: $(node -v)"
+fi
+
+echo "Node version: $(node -v)"
+echo "NPM version: $(npm -v)"
+
+if [ "$TOOLCHAIN_INSTALL_PNPM" = "true" ]; then
+    echo "=== Installing pnpm ==="
+    corepack enable
+    if [ -n "$TOOLCHAIN_PNPM_VERSION" ]; then
+        corepack prepare "pnpm@$TOOLCHAIN_PNPM_VERSION" --activate
+    else
+        corepack prepare pnpm@latest --activate
+    fi
+    echo "pnpm version: $(pnpm -v)"
+else
+    echo "Skipping pnpm installation by configuration"
+fi
+
+if [ -n "$TOOLCHAIN_EXTRA_APT_PACKAGES" ]; then
+    echo "=== Installing Extra APT Packages ==="
+    # shellcheck disable=SC2086
+    apt-get install -y $TOOLCHAIN_EXTRA_APT_PACKAGES
 fi
 
 # Install Docker
@@ -83,6 +115,25 @@ systemctl start docker
 echo "=== Creating Bot User ==="
 useradd -m -s /bin/bash -U openclaw || true
 usermod -aG docker openclaw
+
+if [ "$TOOLCHAIN_INSTALL_RUST" = "true" ]; then
+    echo "=== Installing Rust Toolchain for openclaw user ==="
+    sudo -u openclaw -H bash -lc "curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain \"$TOOLCHAIN_RUST_TOOLCHAIN\""
+    sudo -u openclaw -H bash -lc '~/.cargo/bin/rustc --version && ~/.cargo/bin/cargo --version'
+
+    if [ -n "$TOOLCHAIN_CARGO_CRATES" ]; then
+        echo "=== Installing Additional Cargo Crates ==="
+        sudo -u openclaw -H bash -lc "~/.cargo/bin/cargo install $TOOLCHAIN_CARGO_CRATES"
+    fi
+else
+    echo "Skipping Rust installation by configuration"
+fi
+
+if [ -n "$TOOLCHAIN_GLOBAL_NPM_PACKAGES" ]; then
+    echo "=== Installing Global NPM Packages ==="
+    # shellcheck disable=SC2086
+    npm install -g $TOOLCHAIN_GLOBAL_NPM_PACKAGES
+fi
 
 # Prepare log file early so bootstrap steps are captured
 touch /var/log/openclaw-bot.log

@@ -21,6 +21,16 @@ pub struct AppConfig {
     pub customizer_skip_cron: bool,
     pub customizer_skip_git: bool,
     pub customizer_skip_heartbeat: bool,
+
+    // Droplet toolchain/bootstrap customization
+    pub toolchain_node_major: u8,
+    pub toolchain_install_pnpm: bool,
+    pub toolchain_pnpm_version: String,
+    pub toolchain_install_rust: bool,
+    pub toolchain_rust_toolchain: String,
+    pub toolchain_extra_apt_packages: String,
+    pub toolchain_global_npm_packages: String,
+    pub toolchain_cargo_crates: String,
 }
 
 impl AppConfig {
@@ -46,6 +56,15 @@ impl AppConfig {
             .set_default("customizer_skip_cron", true)?
             .set_default("customizer_skip_git", true)?
             .set_default("customizer_skip_heartbeat", true)?
+            // Droplet toolchain/bootstrap defaults
+            .set_default("toolchain_node_major", 20)?
+            .set_default("toolchain_install_pnpm", true)?
+            .set_default("toolchain_pnpm_version", "")?
+            .set_default("toolchain_install_rust", true)?
+            .set_default("toolchain_rust_toolchain", "stable")?
+            .set_default("toolchain_extra_apt_packages", "")?
+            .set_default("toolchain_global_npm_packages", "")?
+            .set_default("toolchain_cargo_crates", "")?
             .build()?;
 
         config.try_deserialize()
