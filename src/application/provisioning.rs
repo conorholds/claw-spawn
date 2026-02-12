@@ -589,6 +589,7 @@ mod tests {
         let embedded = include_str!("../../scripts/openclaw-bootstrap.sh");
         assert!(embedded.contains("<< EOFSERVICE"));
         assert!(!embedded.contains("<< 'EOFSERVICE'"));
+        assert!(embedded.contains("HB_RESULT=$(send_heartbeat || echo \"000\")"));
     }
 
     struct TestErr;

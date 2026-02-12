@@ -331,7 +331,7 @@ fetch_config || echo "Warning: Could not fetch initial config, using local"
 # Start heartbeat and config sync loop
 while true; do
     # Send heartbeat every 30 seconds
-    HB_RESULT=$(send_heartbeat)
+    HB_RESULT=$(send_heartbeat || echo "000")
     echo "Heartbeat: HTTP $HB_RESULT at $(date)"
     
     # Try to fetch new config every 2 minutes (every 4th iteration)

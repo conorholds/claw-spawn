@@ -88,14 +88,14 @@ Legend: `[ ]` pending, `[x]` completed
     - Run `cargo test`.
   - Completion note: Added explicit `ProvisioningError` -> HTTP status mapping for bot actions (400/404/429 + fallback 500) and removed blanket 500 behavior. Added `server::http::tests::map_bot_action_error_maps_expected_status_codes`; verified with full `cargo test`.
 
-- [ ] **F-009 Make heartbeat loop resilient to transient command failures**
+- [x] **F-009 Make heartbeat loop resilient to transient command failures**
   - Files: `scripts/openclaw-bootstrap.sh`
   - Planned fix:
     - Ensure heartbeat command failure does not terminate runner loop under `set -e`.
   - Test plan:
     - Add script-generation test asserting resilient heartbeat command form.
     - Run `cargo test`.
-  - Completion note: _pending_
+  - Completion note: Updated runner loop heartbeat capture to `HB_RESULT=$(send_heartbeat || echo \"000\")` so transient curl failures do not terminate under `set -e`. Verified by script assertion in `application::provisioning::tests::f002_user_data_exports_customizer_and_toolchain_values` and full `cargo test`.
 
 ## Low
 
