@@ -140,11 +140,13 @@ impl BotRepository for MockBotRepository {
     async fn list_by_account_paginated(
         &self,
         account_id: Uuid,
-        _limit: i64,
-        _offset: i64,
+        limit: i64,
+        offset: i64,
     ) -> Result<Vec<Bot>, RepositoryError> {
-        // For mock, pagination is simplified - just return all
-        self.list_by_account(account_id).await
+        let all = self.list_by_account(account_id).await?;
+        let offset = offset.max(0) as usize;
+        let limit = limit.max(0) as usize;
+        Ok(all.into_iter().skip(offset).take(limit).collect())
     }
 
     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError> {
@@ -785,8 +787,13 @@ async fn test_pagination() {
         .list_by_account_paginated(account_id, 2, 0)
         .await
         .expect("Failed to get page 1");
-    // Mock implementation returns all, but real would limit
-    assert!(!page1.is_empty());
+    assert_eq!(page1.len(), 2);
+
+    let page2 = bot_repo
+        .list_by_account_paginated(account_id, 2, 2)
+        .await
+        .expect("Failed to get page 2");
+    assert_eq!(page2.len(), 2);
 }
 
 #[tokio::test]

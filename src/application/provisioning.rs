@@ -139,6 +139,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use async_trait::async_trait;
@@ -492,10 +493,10 @@ mod tests {
             NoopDropletRepo,
         > = ProvisioningService::new(
             do_client,
-            Arc::new(NoopAccountRepo::default()),
-            Arc::new(NoopBotRepo::default()),
-            Arc::new(NoopConfigRepo::default()),
-            Arc::new(NoopDropletRepo::default()),
+            Arc::new(NoopAccountRepo),
+            Arc::new(NoopBotRepo),
+            Arc::new(NoopConfigRepo),
+            Arc::new(NoopDropletRepo),
             encryption,
             "ubuntu-22-04-x64".to_string(),
             "https://example.invalid".to_string(),
@@ -541,10 +542,10 @@ mod tests {
             NoopDropletRepo,
         > = ProvisioningService::new(
             do_client,
-            Arc::new(NoopAccountRepo::default()),
-            Arc::new(NoopBotRepo::default()),
-            Arc::new(NoopConfigRepo::default()),
-            Arc::new(NoopDropletRepo::default()),
+            Arc::new(NoopAccountRepo),
+            Arc::new(NoopBotRepo),
+            Arc::new(NoopConfigRepo),
+            Arc::new(NoopDropletRepo),
             encryption,
             "ubuntu-22-04-x64".to_string(),
             "https://control.example".to_string(),
@@ -1343,50 +1344,4 @@ export TOOLCHAIN_CARGO_CRATES="{}"
         Ok(())
     }
 
-    pub async fn sync_droplet_status(&self, bot_id: Uuid) -> Result<(), ProvisioningError> {
-        let bot = self.bot_repo.get_by_id(bot_id).await?;
-
-        if let Some(droplet_id) = bot.droplet_id {
-            match self.do_client.get_droplet(droplet_id).await {
-                Ok(droplet) => {
-                    let status_str = match droplet.status {
-                        crate::domain::DropletStatus::Active => "active",
-                        crate::domain::DropletStatus::New => "new",
-                        crate::domain::DropletStatus::Off => "off",
-                        _ => "error",
-                    };
-
-                    self.droplet_repo
-                        .update_status(droplet_id, status_str)
-                        .await?;
-
-                    if let Some(ip) = droplet.ip_address {
-                        self.droplet_repo.update_ip(droplet_id, Some(ip)).await?;
-                    }
-
-                    if bot.status == BotStatus::Provisioning
-                        && droplet.status == crate::domain::DropletStatus::Active
-                    {
-                        info!(
-                            "Bot {} droplet {} is now active, waiting for heartbeat",
-                            bot_id, droplet_id
-                        );
-                    }
-                }
-                Err(DigitalOceanError::NotFound(_)) => {
-                    warn!("Droplet {} for bot {} not found", droplet_id, bot_id);
-                    if bot.status != BotStatus::Destroyed && bot.status != BotStatus::Error {
-                        self.bot_repo
-                            .update_status(bot_id, BotStatus::Error)
-                            .await?;
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to sync droplet {} status: {}", droplet_id, e);
-                }
-            }
-        }
-
-        Ok(())
-    }
 }

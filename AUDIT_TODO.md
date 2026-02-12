@@ -99,7 +99,7 @@ Legend: `[ ]` pending, `[x]` completed
 
 ## Low
 
-- [ ] **F-010 Remove dead code and tighten maintenance checks**
+- [x] **F-010 Remove dead code and tighten maintenance checks**
   - Files: `src/application/provisioning.rs`, `src/infrastructure/digital_ocean.rs`, `Cargo.toml`, `Cargo.lock`, `tests/integration_tests.rs`, `.github/workflows/ci.yml`
   - Planned fix:
     - Remove unused `sync_droplet_status` and dead error variant.
@@ -107,4 +107,4 @@ Legend: `[ ]` pending, `[x]` completed
     - Improve pagination mock fidelity and tighten CI clippy scope.
   - Test plan:
     - Run `cargo check`, `cargo clippy --all-targets`, `cargo test`.
-  - Completion note: _pending_
+  - Completion note: Removed dead `sync_droplet_status` and unused `DigitalOceanError::MaxRetriesExceeded`, removed unused dependencies, improved integration mock pagination to enforce limit/offset behavior, and tightened CI clippy invocation to `--all-targets`. Verified with `cargo check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test`.

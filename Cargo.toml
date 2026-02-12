@@ -65,14 +65,8 @@ uuid = { version = "1.6", features = ["v4", "serde"] }
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 
-# Validation
-validator = { version = "0.16", features = ["derive"] }
-
 # Enum utilities (MED-007)
 strum = { version = "0.25", features = ["derive"] }
-
-# Queue/background jobs (for provisioning queue)
-tokio-cron-scheduler = { version = "0.9", optional = true }
 
 # Server-only deps (optional)
 axum = { version = "0.7", features = ["tokio", "http1", "json"], optional = true }
@@ -83,5 +77,3 @@ utoipa = { version = "4.1", features = ["axum_extras"], optional = true }
 utoipa-swagger-ui = { version = "6.0", features = ["axum"], optional = true }
 
 [dev-dependencies]
-tokio-test = "0.4"
-mockall = "0.12"

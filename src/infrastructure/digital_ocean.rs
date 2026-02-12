@@ -19,8 +19,6 @@ pub enum DigitalOceanError {
     InvalidResponse(String),
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
-    #[error("Max retries exceeded for DO API call")]
-    MaxRetriesExceeded,
 }
 
 /// REL-002: Retry configuration for DO API calls
