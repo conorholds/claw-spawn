@@ -69,14 +69,14 @@ Legend: `[ ]` pending, `[x]` completed
     - Run `cargo test`.
   - Completion note: Replaced byte slicing with char-based truncation in `sanitize_bot_name`, preventing UTF-8 boundary panics. Added `application::provisioning::tests::f006_sanitize_bot_name_truncates_multibyte_input_safely`; verified with full `cargo test`.
 
-- [ ] **F-007 Prefer public IPv4 when parsing droplet IP**
+- [x] **F-007 Prefer public IPv4 when parsing droplet IP**
   - Files: `src/domain/droplet.rs`
   - Planned fix:
     - Select first `networks.v4` entry where `type_ == "public"`, fallback to `None`.
   - Test plan:
     - Add unit tests for mixed private/public ordering and missing public network.
     - Run `cargo test`.
-  - Completion note: _pending_
+  - Completion note: `Droplet::from_do_response` now selects the first `type_ == \"public\"` IPv4, avoiding private IP persistence. Added tests `domain::droplet::tests::from_do_response_prefers_public_ipv4` and `domain::droplet::tests::from_do_response_handles_missing_public_ipv4`; verified with full `cargo test`.
 
 - [ ] **F-008 Return precise HTTP status codes for bot actions**
   - Files: `src/server/http.rs`
