@@ -44,6 +44,10 @@ fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
         .filter(|t| !t.is_empty())
 }
 
+fn is_admin_authorized(headers: &HeaderMap, expected_token: &str) -> bool {
+    !expected_token.is_empty() && extract_bearer_token(headers) == Some(expected_token)
+}
+
 fn parse_subscription_tier(tier: &str) -> Option<crate::domain::SubscriptionTier> {
     match tier {
         "free" => Some(crate::domain::SubscriptionTier::Free),
@@ -130,6 +134,19 @@ mod tests {
         assert!(parse_asset_focus("nope").is_none());
         assert!(parse_algorithm("nope").is_none());
         assert!(parse_strictness("nope").is_none());
+    }
+
+    #[test]
+    fn is_admin_authorized_requires_exact_bearer_match() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer admin-token"),
+        );
+
+        assert!(is_admin_authorized(&headers, "admin-token"));
+        assert!(!is_admin_authorized(&headers, "wrong-token"));
+        assert!(!is_admin_authorized(&headers, ""));
     }
 }
 
@@ -241,8 +258,16 @@ struct CreateAccountRequest {
 )]
 async fn create_account(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(req): Json<CreateAccountRequest>,
 ) -> impl IntoResponse {
+    if !is_admin_authorized(&headers, &state.api_bearer_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Missing or invalid admin authorization token"})),
+        );
+    }
+
     let tier = match parse_subscription_tier(req.tier.as_str()) {
         Some(t) => t,
         None => {
@@ -278,8 +303,22 @@ async fn create_account(
     params(("id" = Uuid, Path, description = "Account ID")),
     responses((status = 501, description = "Not implemented"))
 )]
-async fn get_account(State(_state): State<AppState>, Path(_id): Path<Uuid>) -> impl IntoResponse {
-    (StatusCode::NOT_IMPLEMENTED, "Get account not implemented")
+async fn get_account(
+    State(state): State<AppState>,
+    Path(_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !is_admin_authorized(&headers, &state.api_bearer_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Missing or invalid admin authorization token"})),
+        );
+    }
+
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(serde_json::json!({"error": "Get account not implemented"})),
+    )
 }
 
 #[derive(Deserialize, Debug, IntoParams, ToSchema)]
@@ -311,8 +350,16 @@ const MAX_PAGINATION_LIMIT: i64 = 1000;
 async fn list_bots(
     State(state): State<AppState>,
     Path(account_id): Path<Uuid>,
+    headers: HeaderMap,
     Query(params): Query<PaginationParams>,
 ) -> impl IntoResponse {
+    if !is_admin_authorized(&headers, &state.api_bearer_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Missing or invalid admin authorization token"})),
+        );
+    }
+
     let limit = params.limit.clamp(1, MAX_PAGINATION_LIMIT);
     let offset = params.offset.max(0);
 
@@ -367,8 +414,16 @@ struct CreateBotRequest {
 )]
 async fn create_bot(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(req): Json<CreateBotRequest>,
 ) -> impl IntoResponse {
+    if !is_admin_authorized(&headers, &state.api_bearer_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Missing or invalid admin authorization token"})),
+        );
+    }
+
     let persona = match parse_persona(req.persona.as_str()) {
         Some(p) => p,
         None => {
@@ -505,7 +560,18 @@ async fn create_bot(
         (status = 404, description = "Bot not found", body = Object)
     )
 )]
-async fn get_bot(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
+async fn get_bot(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !is_admin_authorized(&headers, &state.api_bearer_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Missing or invalid admin authorization token"})),
+        );
+    }
+
     match state.lifecycle.get_bot(id).await {
         Ok(bot) => (
             StatusCode::OK,
@@ -529,7 +595,18 @@ async fn get_bot(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl In
         (status = 500, description = "Failed to get config", body = Object)
     )
 )]
-async fn get_bot_config(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
+async fn get_bot_config(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !is_admin_authorized(&headers, &state.api_bearer_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Missing or invalid admin authorization token"})),
+        );
+    }
+
     match state.lifecycle.get_desired_config(id).await {
         Ok(Some(config)) => (StatusCode::OK, Json(serde_json::json!(config))),
         Ok(None) => (
@@ -563,8 +640,16 @@ struct BotActionRequest {
 async fn bot_action(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    headers: HeaderMap,
     Json(req): Json<BotActionRequest>,
 ) -> impl IntoResponse {
+    if !is_admin_authorized(&headers, &state.api_bearer_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Missing or invalid admin authorization token"})),
+        );
+    }
+
     let result = match req.action.as_str() {
         "pause" => state.provisioning.pause_bot(id).await,
         "resume" => state.provisioning.resume_bot(id).await,

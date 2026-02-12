@@ -58,6 +58,7 @@ The `Makefile` provides easy commands for development:
 export CLAW_DATABASE_URL="postgres://user:password@localhost/claw_spawn"
 export CLAW_DIGITALOCEAN_TOKEN="your_digitalocean_api_token"
 export CLAW_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+export CLAW_API_BEARER_TOKEN="$(openssl rand -base64 32)"
 ```
 
 ### 2. Setup Database
@@ -102,6 +103,7 @@ The Docker setup includes:
 | `CLAW_DATABASE_URL` | Yes | - | PostgreSQL connection string |
 | `CLAW_DIGITALOCEAN_TOKEN` | Yes | - | DigitalOcean API token |
 | `CLAW_ENCRYPTION_KEY` | Yes | - | Base64-encoded 32-byte key |
+| `CLAW_API_BEARER_TOKEN` | Yes | - | Bearer token required for privileged `/accounts` and `/bots` routes |
 | `CLAW_SERVER_HOST` | No | `0.0.0.0` | Server bind address |
 | `CLAW_SERVER_PORT` | No | `8080` | Server port |
 | `CLAW_OPENCLAW_IMAGE` | No | `ubuntu-22-04-x64` | DO droplet image |
@@ -178,6 +180,7 @@ claw-spawn = { version = "0.1", features = ["server"] }
 ```bash
 curl -X POST http://localhost:8080/bots \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CLAW_API_BEARER_TOKEN" \
   -d '{
     "account_id": "123e4567-e89b-12d3-a456-426614174000",
     "name": "My First Bot",
@@ -211,25 +214,32 @@ Response:
 ### Check Bot Status
 
 ```bash
-curl http://localhost:8080/bots/{bot_id}
+curl -H "Authorization: Bearer $CLAW_API_BEARER_TOKEN" http://localhost:8080/bots/{bot_id}
 ```
 
 ### Bot Actions
 
 ```bash
 # Pause
-curl -X POST http://localhost:8080/bots/{bot_id}/actions -d '{"action": "pause"}'
+curl -X POST http://localhost:8080/bots/{bot_id}/actions \
+  -H "Authorization: Bearer $CLAW_API_BEARER_TOKEN" \
+  -d '{"action": "pause"}'
 
 # Resume  
-curl -X POST http://localhost:8080/bots/{bot_id}/actions -d '{"action": "resume"}'
+curl -X POST http://localhost:8080/bots/{bot_id}/actions \
+  -H "Authorization: Bearer $CLAW_API_BEARER_TOKEN" \
+  -d '{"action": "resume"}'
 
 # Destroy
-curl -X POST http://localhost:8080/bots/{bot_id}/actions -d '{"action": "destroy"}'
+curl -X POST http://localhost:8080/bots/{bot_id}/actions \
+  -H "Authorization: Bearer $CLAW_API_BEARER_TOKEN" \
+  -d '{"action": "destroy"}'
 ```
 
 ## 📚 API Endpoints
 
 ### App Endpoints
+Require header: `Authorization: Bearer $CLAW_API_BEARER_TOKEN`
 - `POST /bots` - Create bot
 - `GET /bots/:id` - Get bot details
 - `GET /accounts/:id/bots` - List account bots

@@ -20,6 +20,7 @@ pub type BotLifecycleServiceType =
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
+    pub api_bearer_token: String,
     pub account_repo: Arc<PostgresAccountRepository>,
     pub provisioning: Arc<ProvisioningServiceType>,
     pub lifecycle: Arc<BotLifecycleServiceType>,
@@ -51,6 +52,8 @@ pub async fn build_state_with_pool(
     let bot_repo = Arc::new(PostgresBotRepository::new(pool.clone()));
     let config_repo = Arc::new(PostgresConfigRepository::new(pool.clone()));
     let droplet_repo = Arc::new(PostgresDropletRepository::new(pool.clone()));
+
+    let api_bearer_token = config.api_bearer_token.clone();
 
     let provisioning = Arc::new(ProvisioningService::new(
         do_client,
@@ -87,6 +90,7 @@ pub async fn build_state_with_pool(
 
     Ok(AppState {
         pool,
+        api_bearer_token,
         account_repo,
         provisioning,
         lifecycle,

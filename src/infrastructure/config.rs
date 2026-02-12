@@ -6,6 +6,7 @@ pub struct AppConfig {
     pub database_url: String,
     pub digitalocean_token: String,
     pub encryption_key: String,
+    pub api_bearer_token: String,
     pub server_host: String,
     pub server_port: u16,
     pub openclaw_image: String,

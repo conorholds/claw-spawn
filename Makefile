@@ -59,6 +59,7 @@ setup-env:
 		echo "CLAW_DATABASE_URL=postgres://postgres:postgres@localhost:5432/claw_spawn" > .env; \
 		echo "CLAW_DIGITALOCEAN_TOKEN=your_digitalocean_api_token_here" >> .env; \
 		echo "CLAW_ENCRYPTION_KEY=$$(openssl rand -base64 32)" >> .env; \
+		echo "CLAW_API_BEARER_TOKEN=$$(openssl rand -base64 32)" >> .env; \
 		echo "CLAW_SERVER_HOST=0.0.0.0" >> .env; \
 		echo "CLAW_SERVER_PORT=8080" >> .env; \
 		echo "CLAW_OPENCLAW_IMAGE=ubuntu-22-04-x64" >> .env; \
