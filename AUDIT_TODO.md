@@ -38,14 +38,14 @@ Legend: `[ ]` pending, `[x]` completed
     - Run `cargo test`.
   - Completion note: Added `BotRepository::hard_delete` rollback path and invoked it on `create_bot` failure before counter decrement. Added failure-injection test `application::provisioning::tests::f005_create_bot_rolls_back_partial_state_when_config_create_fails`. Verified with full `cargo test`.
 
-- [ ] **F-004 Fix Docker healthcheck dependency mismatch**
+- [x] **F-004 Fix Docker healthcheck dependency mismatch**
   - Files: `Dockerfile`
   - Planned fix:
     - Install `curl` in runtime image used by Docker `HEALTHCHECK`.
   - Test plan:
     - Run `docker build` (or syntax/build validation) and ensure Dockerfile remains valid.
     - Run `cargo check` for regression safety.
-  - Completion note: _pending_
+  - Completion note: Added `curl` to runtime apt packages so Docker `HEALTHCHECK` command has its required binary. Verified with `cargo check`; attempted `docker build -t claw-spawn:audit-f004 .` but local Docker session was blocked (`only one connection allowed`).
 
 - [ ] **F-005 Stop storing registration tokens in plaintext**
   - Files: `src/infrastructure/repository.rs`, `Cargo.toml`, `Cargo.lock`, `tests/integration_tests.rs` (if needed)
