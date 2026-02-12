@@ -79,8 +79,8 @@ fn sanitize_bot_name(name: &str) -> String {
 
     // Trim leading/trailing whitespace and limit length
     let trimmed = sanitized.trim();
-    if trimmed.len() > MAX_BOT_NAME_LENGTH {
-        trimmed[..MAX_BOT_NAME_LENGTH].to_string()
+    if trimmed.chars().count() > MAX_BOT_NAME_LENGTH {
+        trimmed.chars().take(MAX_BOT_NAME_LENGTH).collect()
     } else {
         trimmed.to_string()
     }
@@ -694,6 +694,13 @@ mod tests {
         assert!(res.is_err());
         assert_eq!(bot_repo.hard_deleted.load(Ordering::SeqCst), 1);
         assert_eq!(bot_repo.decremented.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn f006_sanitize_bot_name_truncates_multibyte_input_safely() {
+        let name = "é".repeat(MAX_BOT_NAME_LENGTH + 12);
+        let sanitized = sanitize_bot_name(&name);
+        assert_eq!(sanitized.chars().count(), MAX_BOT_NAME_LENGTH);
     }
 }
 

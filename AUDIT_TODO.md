@@ -60,14 +60,14 @@ Legend: `[ ]` pending, `[x]` completed
 
 ## Medium
 
-- [ ] **F-006 Make bot-name truncation UTF-8 safe**
+- [x] **F-006 Make bot-name truncation UTF-8 safe**
   - Files: `src/application/provisioning.rs`
   - Planned fix:
     - Replace byte-slice truncation with char-based truncation.
   - Test plan:
     - Add unit test with multibyte input > max length; ensure no panic and bounded length.
     - Run `cargo test`.
-  - Completion note: _pending_
+  - Completion note: Replaced byte slicing with char-based truncation in `sanitize_bot_name`, preventing UTF-8 boundary panics. Added `application::provisioning::tests::f006_sanitize_bot_name_truncates_multibyte_input_safely`; verified with full `cargo test`.
 
 - [ ] **F-007 Prefer public IPv4 when parsing droplet IP**
   - Files: `src/domain/droplet.rs`
