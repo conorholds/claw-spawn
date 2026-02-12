@@ -27,7 +27,7 @@ Legend: `[ ]` pending, `[x]` completed
 
 ## High
 
-- [ ] **F-003 Prevent partial DB state during bot creation failures**
+- [x] **F-003 Prevent partial DB state during bot creation failures**
   - Files: `src/infrastructure/repository.rs`, `src/application/provisioning.rs`, `tests/integration_tests.rs`, `src/application/provisioning.rs` (tests)
   - Planned fix:
     - Add rollback-capable hard delete path in repository.
@@ -36,7 +36,7 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Add/extend service tests to simulate failures after bot row creation and verify rollback path is invoked.
     - Run `cargo test`.
-  - Completion note: _pending_
+  - Completion note: Added `BotRepository::hard_delete` rollback path and invoked it on `create_bot` failure before counter decrement. Added failure-injection test `application::provisioning::tests::f005_create_bot_rolls_back_partial_state_when_config_create_fails`. Verified with full `cargo test`.
 
 - [ ] **F-004 Fix Docker healthcheck dependency mismatch**
   - Files: `Dockerfile`

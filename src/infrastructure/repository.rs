@@ -80,6 +80,8 @@ pub trait BotRepository: Send + Sync {
     ) -> Result<(), RepositoryError>;
     #[must_use]
     async fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+    #[must_use]
+    async fn hard_delete(&self, id: Uuid) -> Result<(), RepositoryError>;
     /// Atomically increment bot counter for account, returning (success, current_count, max_count)
     /// CRIT-002: Prevents race conditions in account limit checking
     #[must_use]
@@ -529,6 +531,20 @@ impl BotRepository for PostgresBotRepository {
             "#,
         )
         .bind(Utc::now())
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn hard_delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            DELETE FROM bots
+            WHERE id = $1
+            "#,
+        )
         .bind(id)
         .execute(&self.pool)
         .await?;

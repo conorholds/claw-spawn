@@ -224,6 +224,19 @@ impl BotRepository for MockBotRepository {
         Ok(())
     }
 
+    async fn hard_delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let mut bots = self.bots.lock().unwrap();
+        let mut account_bots = self.account_bots.lock().unwrap();
+        let bot = bots
+            .remove(&id)
+            .ok_or_else(|| RepositoryError::NotFound(format!("Bot {}", id)))?;
+
+        if let Some(ids) = account_bots.get_mut(&bot.account_id) {
+            ids.retain(|existing| *existing != id);
+        }
+        Ok(())
+    }
+
     async fn increment_bot_counter(
         &self,
         account_id: Uuid,

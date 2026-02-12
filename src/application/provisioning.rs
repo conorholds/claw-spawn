@@ -142,6 +142,9 @@ where
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use chrono::Utc;
+    use std::collections::HashSet;
+    use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Default)]
@@ -235,6 +238,9 @@ mod tests {
         async fn delete(&self, _id: Uuid) -> Result<(), RepositoryError> {
             Err(RepositoryError::InvalidData("noop".to_string()))
         }
+        async fn hard_delete(&self, _id: Uuid) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
         async fn increment_bot_counter(
             &self,
             _account_id: Uuid,
@@ -311,6 +317,162 @@ mod tests {
             Err(RepositoryError::InvalidData("noop".to_string()))
         }
         async fn mark_destroyed(&self, _droplet_id: i64) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+    }
+
+    #[derive(Default)]
+    struct HappyAccountRepo;
+    #[async_trait]
+    impl AccountRepository for HappyAccountRepo {
+        async fn create(&self, _account: &crate::domain::Account) -> Result<(), RepositoryError> {
+            Ok(())
+        }
+        async fn get_by_id(&self, id: Uuid) -> Result<crate::domain::Account, RepositoryError> {
+            let now = Utc::now();
+            Ok(crate::domain::Account {
+                id,
+                external_id: "test-account".to_string(),
+                subscription_tier: crate::domain::SubscriptionTier::Basic,
+                max_bots: 2,
+                created_at: now,
+                updated_at: now,
+            })
+        }
+        async fn get_by_external_id(
+            &self,
+            _external_id: &str,
+        ) -> Result<crate::domain::Account, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_subscription(
+            &self,
+            _id: Uuid,
+            _tier: crate::domain::SubscriptionTier,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+    }
+
+    #[derive(Default)]
+    struct RollbackTrackingBotRepo {
+        created: Mutex<HashSet<Uuid>>,
+        hard_deleted: AtomicUsize,
+        decremented: AtomicUsize,
+    }
+    #[async_trait]
+    impl BotRepository for RollbackTrackingBotRepo {
+        async fn create(&self, bot: &Bot) -> Result<(), RepositoryError> {
+            self.created.lock().expect("lock").insert(bot.id);
+            Ok(())
+        }
+        async fn get_by_id(&self, _id: Uuid) -> Result<Bot, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_by_id_with_token(
+            &self,
+            _id: Uuid,
+            _token: &str,
+        ) -> Result<Bot, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn list_by_account(&self, _account_id: Uuid) -> Result<Vec<Bot>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn list_by_account_paginated(
+            &self,
+            _account_id: Uuid,
+            _limit: i64,
+            _offset: i64,
+        ) -> Result<Vec<Bot>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn count_by_account(&self, _account_id: Uuid) -> Result<i64, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_status(
+            &self,
+            _id: Uuid,
+            _status: BotStatus,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_droplet(
+            &self,
+            _bot_id: Uuid,
+            _droplet_id: Option<i64>,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_config_version(
+            &self,
+            _bot_id: Uuid,
+            _desired: Option<Uuid>,
+            _applied: Option<Uuid>,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_heartbeat(&self, _bot_id: Uuid) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn update_registration_token(
+            &self,
+            _bot_id: Uuid,
+            _token: &str,
+        ) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn delete(&self, _id: Uuid) -> Result<(), RepositoryError> {
+            Ok(())
+        }
+        async fn hard_delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+            let _ = self.created.lock().expect("lock").remove(&id);
+            self.hard_deleted.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn increment_bot_counter(
+            &self,
+            _account_id: Uuid,
+        ) -> Result<(bool, i32, i32), RepositoryError> {
+            Ok((true, 1, 2))
+        }
+        async fn decrement_bot_counter(&self, _account_id: Uuid) -> Result<(), RepositoryError> {
+            self.decremented.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn list_stale_bots(
+            &self,
+            _threshold: chrono::DateTime<chrono::Utc>,
+        ) -> Result<Vec<Bot>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+    }
+
+    #[derive(Default)]
+    struct FailingConfigCreateRepo;
+    #[async_trait]
+    impl ConfigRepository for FailingConfigCreateRepo {
+        async fn create(&self, _config: &StoredBotConfig) -> Result<(), RepositoryError> {
+            Err(RepositoryError::InvalidData(
+                "forced config create failure".to_string(),
+            ))
+        }
+        async fn get_by_id(&self, _id: Uuid) -> Result<StoredBotConfig, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_latest_for_bot(
+            &self,
+            _bot_id: Uuid,
+        ) -> Result<Option<StoredBotConfig>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn list_by_bot(
+            &self,
+            _bot_id: Uuid,
+        ) -> Result<Vec<StoredBotConfig>, RepositoryError> {
+            Err(RepositoryError::InvalidData("noop".to_string()))
+        }
+        async fn get_next_version_atomic(&self, _bot_id: Uuid) -> Result<i32, RepositoryError> {
             Err(RepositoryError::InvalidData("noop".to_string()))
         }
     }
@@ -453,6 +615,86 @@ mod tests {
         assert!(res.is_err());
         assert_eq!(calls.load(Ordering::SeqCst), RETRY_ATTEMPTS);
     }
+
+    #[tokio::test]
+    async fn f005_create_bot_rolls_back_partial_state_when_config_create_fails() {
+        let encryption = Arc::new(
+            SecretsEncryption::new("YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=")
+                .expect("valid test key"),
+        );
+        let do_client = Arc::new(DigitalOceanClient::new("test-token".to_string()).unwrap());
+
+        let bot_repo = Arc::new(RollbackTrackingBotRepo::default());
+
+        let svc: ProvisioningService<
+            HappyAccountRepo,
+            RollbackTrackingBotRepo,
+            FailingConfigCreateRepo,
+            NoopDropletRepo,
+        > = ProvisioningService::new(
+            do_client,
+            Arc::new(HappyAccountRepo),
+            bot_repo.clone(),
+            Arc::new(FailingConfigCreateRepo),
+            Arc::new(NoopDropletRepo),
+            encryption,
+            "ubuntu-22-04-x64".to_string(),
+            "https://example.invalid".to_string(),
+            "https://github.com/janebot2026/janebot-cli.git".to_string(),
+            "4b170b4aa31f79bda84f7383b3992ca8681d06d3".to_string(),
+            "/opt/openclaw/workspace".to_string(),
+            "Jane".to_string(),
+            "Cedros".to_string(),
+            true,
+            true,
+            true,
+            true,
+            20,
+            true,
+            "".to_string(),
+            true,
+            "stable".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+
+        let account_id = Uuid::new_v4();
+        let res = svc
+            .create_bot(
+                account_id,
+                "rollback-target".to_string(),
+                Persona::Beginner,
+                BotConfig {
+                    id: Uuid::new_v4(),
+                    bot_id: Uuid::new_v4(),
+                    version: 1,
+                    trading_config: crate::domain::TradingConfig {
+                        asset_focus: crate::domain::AssetFocus::Majors,
+                        algorithm: crate::domain::AlgorithmMode::Trend,
+                        strictness: crate::domain::StrictnessLevel::Medium,
+                        paper_mode: true,
+                        signal_knobs: None,
+                    },
+                    risk_config: crate::domain::RiskConfig {
+                        max_position_size_pct: 10.0,
+                        max_daily_loss_pct: 5.0,
+                        max_drawdown_pct: 10.0,
+                        max_trades_per_day: 10,
+                    },
+                    secrets: crate::domain::BotSecrets {
+                        llm_provider: "test".to_string(),
+                        llm_api_key: "test-key".to_string(),
+                    },
+                    created_at: Utc::now(),
+                },
+            )
+            .await;
+
+        assert!(res.is_err());
+        assert_eq!(bot_repo.hard_deleted.load(Ordering::SeqCst), 1);
+        assert_eq!(bot_repo.decremented.load(Ordering::SeqCst), 1);
+    }
 }
 
 impl<A, B, C, D> ProvisioningService<A, B, C, D>
@@ -563,6 +805,17 @@ where
         let result = self.create_bot_internal(&mut bot, config).await;
 
         if result.is_err() {
+            if let Err(e) = self.bot_repo.hard_delete(bot.id).await {
+                if !matches!(e, RepositoryError::NotFound(_)) {
+                    error!(
+                        account_id = %account_id,
+                        bot_id = %bot.id,
+                        error = %e,
+                        "Failed to rollback bot row after failed creation"
+                    );
+                }
+            }
+
             // Decrement counter on failure to allow retry
             if let Err(e) = self.bot_repo.decrement_bot_counter(account_id).await {
                 error!(
