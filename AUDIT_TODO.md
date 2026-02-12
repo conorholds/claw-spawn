@@ -15,7 +15,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Run `cargo test`, `cargo check`.
   - Completion note: Added `CLAW_API_BEARER_TOKEN` config/state wiring; privileged `/accounts` + `/bots` routes now require matching bearer token. Verified with `server::http::tests::is_admin_authorized_requires_exact_bearer_match`, `cargo check`, and full `cargo test`.
 
-- [ ] **F-002 Fix systemd environment interpolation in bootstrap script**
+- [x] **F-002 Fix systemd environment interpolation in bootstrap script**
   - Files: `scripts/openclaw-bootstrap.sh`
   - Planned fix:
     - Change service-file generation so env vars are rendered as concrete values, not literal `${...}` placeholders.
@@ -23,7 +23,7 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Add script-level assertion test in Rust provisioning tests that generated script does not contain literal placeholders in systemd env lines.
     - Run `cargo test`.
-  - Completion note: _pending_
+  - Completion note: Switched systemd service heredoc to unquoted delimiter so bootstrap env vars are rendered into unit `Environment=` lines. Verified via `application::provisioning::tests::f002_user_data_exports_customizer_and_toolchain_values` and full `cargo test`.
 
 ## High
 

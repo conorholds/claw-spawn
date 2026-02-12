@@ -423,6 +423,10 @@ mod tests {
         assert!(user_data.contains("export TOOLCHAIN_CARGO_CRATES=\"cargo-binstall\""));
         assert!(user_data.contains("# Start of embedded bootstrap script"));
         assert!(user_data.contains("# OpenClaw Bot Bootstrap Script"));
+
+        let embedded = include_str!("../../scripts/openclaw-bootstrap.sh");
+        assert!(embedded.contains("<< EOFSERVICE"));
+        assert!(!embedded.contains("<< 'EOFSERVICE'"));
     }
 
     struct TestErr;

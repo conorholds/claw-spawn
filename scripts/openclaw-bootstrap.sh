@@ -353,7 +353,7 @@ chmod +x /opt/openclaw/run.sh
 
 # Create systemd service
 echo "=== Creating Systemd Service ==="
-cat > /etc/systemd/system/openclaw-bot.service << 'EOFSERVICE'
+cat > /etc/systemd/system/openclaw-bot.service << EOFSERVICE
 [Unit]
 Description=OpenClaw Bot
 After=docker.service network.target
