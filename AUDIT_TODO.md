@@ -78,7 +78,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Run `cargo test`.
   - Completion note: `Droplet::from_do_response` now selects the first `type_ == \"public\"` IPv4, avoiding private IP persistence. Added tests `domain::droplet::tests::from_do_response_prefers_public_ipv4` and `domain::droplet::tests::from_do_response_handles_missing_public_ipv4`; verified with full `cargo test`.
 
-- [ ] **F-008 Return precise HTTP status codes for bot actions**
+- [x] **F-008 Return precise HTTP status codes for bot actions**
   - Files: `src/server/http.rs`
   - Planned fix:
     - Map known domain failures to 400/404/409/429 where appropriate instead of blanket 500.
@@ -86,7 +86,7 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Add handler-level tests for invalid action and representative error mapping.
     - Run `cargo test`.
-  - Completion note: _pending_
+  - Completion note: Added explicit `ProvisioningError` -> HTTP status mapping for bot actions (400/404/429 + fallback 500) and removed blanket 500 behavior. Added `server::http::tests::map_bot_action_error_maps_expected_status_codes`; verified with full `cargo test`.
 
 - [ ] **F-009 Make heartbeat loop resilient to transient command failures**
   - Files: `scripts/openclaw-bootstrap.sh`

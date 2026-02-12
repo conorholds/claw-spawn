@@ -4,7 +4,7 @@ use crate::domain::{
     Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona, RiskConfig,
     SignalKnobs, StrictnessLevel, TradingConfig,
 };
-use crate::infrastructure::{AccountRepository, DigitalOceanError};
+use crate::infrastructure::{AccountRepository, DigitalOceanError, RepositoryError};
 use axum::{
     extract::{Path, Query, State},
     http::{header, header::HeaderMap, StatusCode},
@@ -92,6 +92,29 @@ fn parse_strictness(strictness: &str) -> Option<StrictnessLevel> {
     }
 }
 
+fn map_bot_action_error(err: &ProvisioningError) -> (StatusCode, serde_json::Value) {
+    match err {
+        ProvisioningError::InvalidConfig(msg) => {
+            (StatusCode::BAD_REQUEST, serde_json::json!({ "error": msg }))
+        }
+        ProvisioningError::Repository(RepositoryError::NotFound(_)) => {
+            (StatusCode::NOT_FOUND, serde_json::json!({ "error": "Bot not found" }))
+        }
+        ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            serde_json::json!({ "error": "Rate limited by DigitalOcean, please retry" }),
+        ),
+        ProvisioningError::DigitalOcean(DigitalOceanError::NotFound(_)) => (
+            StatusCode::NOT_FOUND,
+            serde_json::json!({ "error": "Associated droplet not found" }),
+        ),
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            serde_json::json!({ "error": "Action failed" }),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,6 +170,22 @@ mod tests {
         assert!(is_admin_authorized(&headers, "admin-token"));
         assert!(!is_admin_authorized(&headers, "wrong-token"));
         assert!(!is_admin_authorized(&headers, ""));
+    }
+
+    #[test]
+    fn map_bot_action_error_maps_expected_status_codes() {
+        let (status_invalid, _) =
+            map_bot_action_error(&ProvisioningError::InvalidConfig("bad".to_string()));
+        assert_eq!(status_invalid, StatusCode::BAD_REQUEST);
+
+        let (status_not_found, _) = map_bot_action_error(&ProvisioningError::Repository(
+            RepositoryError::NotFound("missing".to_string()),
+        ));
+        assert_eq!(status_not_found, StatusCode::NOT_FOUND);
+
+        let (status_rate_limited, _) =
+            map_bot_action_error(&ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited));
+        assert_eq!(status_rate_limited, StatusCode::TOO_MANY_REQUESTS);
     }
 }
 
@@ -664,10 +703,8 @@ async fn bot_action(
         Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))),
         Err(e) => {
             error!(error = %e, "Bot action failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Action failed"})),
-            )
+            let (status, body) = map_bot_action_error(&e);
+            (status, Json(body))
         }
     }
 }
