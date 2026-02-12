@@ -47,7 +47,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Run `cargo check` for regression safety.
   - Completion note: Added `curl` to runtime apt packages so Docker `HEALTHCHECK` command has its required binary. Verified with `cargo check`; attempted `docker build -t claw-spawn:audit-f004 .` but local Docker session was blocked (`only one connection allowed`).
 
-- [ ] **F-005 Stop storing registration tokens in plaintext**
+- [x] **F-005 Stop storing registration tokens in plaintext**
   - Files: `src/infrastructure/repository.rs`, `Cargo.toml`, `Cargo.lock`, `tests/integration_tests.rs` (if needed)
   - Planned fix:
     - Hash registration tokens before persistence.
@@ -56,7 +56,7 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Add unit test for token hashing/lookup behavior in repository layer.
     - Run `cargo test`.
-  - Completion note: _pending_
+  - Completion note: Added SHA-256 token hashing at write time (`sha256:<hex>` format) and backward-compatible lookup (`plaintext OR hash`) for legacy rows. Added `infrastructure::repository::tests::hash_registration_token_is_stable_and_prefixed`; verified with full `cargo test`.
 
 ## Medium
 

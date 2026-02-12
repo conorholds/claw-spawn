@@ -1,6 +1,7 @@
 use crate::domain::{Account, Bot, BotStatus, Droplet, Persona, StoredBotConfig, SubscriptionTier};
 use async_trait::async_trait;
 use chrono::Utc;
+use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
 use thiserror::Error;
@@ -285,6 +286,11 @@ impl PostgresBotRepository {
     }
 }
 
+fn hash_registration_token(token: &str) -> String {
+    let digest = Sha256::digest(token.as_bytes());
+    format!("sha256:{:x}", digest)
+}
+
 #[async_trait]
 impl BotRepository for PostgresBotRepository {
     async fn create(&self, bot: &Bot) -> Result<(), RepositoryError> {
@@ -339,17 +345,20 @@ impl BotRepository for PostgresBotRepository {
     }
 
     async fn get_by_id_with_token(&self, id: Uuid, token: &str) -> Result<Bot, RepositoryError> {
+        let hashed_token = hash_registration_token(token);
         let row = sqlx::query(
             r#"
             SELECT id, account_id, name, persona, status, droplet_id,
                    desired_config_version_id, applied_config_version_id,
                    registration_token, created_at, updated_at, last_heartbeat_at
             FROM bots
-            WHERE id = $1 AND registration_token = $2
+            WHERE id = $1
+              AND (registration_token = $2 OR registration_token = $3)
             "#,
         )
         .bind(id)
         .bind(token)
+        .bind(hashed_token)
         .fetch_one(&self.pool)
         .await
         .map_err(|e| match e {
@@ -506,6 +515,7 @@ impl BotRepository for PostgresBotRepository {
         bot_id: Uuid,
         token: &str,
     ) -> Result<(), RepositoryError> {
+        let hashed_token = hash_registration_token(token);
         sqlx::query(
             r#"
             UPDATE bots
@@ -513,7 +523,7 @@ impl BotRepository for PostgresBotRepository {
             WHERE id = $3
             "#,
         )
-        .bind(token)
+        .bind(hashed_token)
         .bind(Utc::now())
         .bind(bot_id)
         .execute(&self.pool)
@@ -636,4 +646,20 @@ fn row_to_bot(row: &sqlx::postgres::PgRow) -> Result<Bot, RepositoryError> {
         updated_at: row.try_get("updated_at")?,
         last_heartbeat_at: row.try_get("last_heartbeat_at")?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hash_registration_token;
+
+    #[test]
+    fn hash_registration_token_is_stable_and_prefixed() {
+        let token = "reg-token-123";
+        let hashed = hash_registration_token(token);
+        let hashed_again = hash_registration_token(token);
+
+        assert_eq!(hashed, hashed_again);
+        assert!(hashed.starts_with("sha256:"));
+        assert_ne!(hashed, token);
+    }
 }
