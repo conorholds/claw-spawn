@@ -605,6 +605,8 @@ mod tests {
         assert!(!embedded.contains("<< 'EOFSERVICE'"));
         assert!(embedded.contains("HB_RESULT=$(send_heartbeat || echo \"000\")"));
         assert!(embedded.contains("if command -v ufw >/dev/null 2>&1; then"));
+        assert!(embedded.contains("--connect-timeout \"$CURL_CONNECT_TIMEOUT_SECONDS\""));
+        assert!(embedded.contains("--max-time \"$CURL_MAX_TIME_SECONDS\""));
     }
 
     struct TestErr;

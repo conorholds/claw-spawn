@@ -14,6 +14,8 @@ REGISTRATION_TOKEN="${REGISTRATION_TOKEN}"
 BOT_ID="${BOT_ID}"
 CONTROL_PLANE_URL="${CONTROL_PLANE_URL:-https://api.cedros.io}"
 BOT_CONFIG='${BOT_CONFIG}'
+CURL_CONNECT_TIMEOUT_SECONDS=10
+CURL_MAX_TIME_SECONDS=30
 
 # Workspace/customization (janebot-cli)
 CUSTOMIZER_REPO_URL="${CUSTOMIZER_REPO_URL:-https://github.com/janebot2026/janebot-cli.git}"
@@ -245,6 +247,8 @@ RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     HTTP_CODE=$(curl -s -o /tmp/register_response.json -w "%{http_code}" \
+        --connect-timeout "$CURL_CONNECT_TIMEOUT_SECONDS" \
+        --max-time "$CURL_MAX_TIME_SECONDS" \
         -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $REGISTRATION_TOKEN" \
@@ -278,12 +282,16 @@ cd /opt/openclaw
 CONTROL_PLANE_URL="${CONTROL_PLANE_URL}"
 BOT_ID="${BOT_ID}"
 REGISTRATION_TOKEN="${REGISTRATION_TOKEN}"
+CURL_CONNECT_TIMEOUT_SECONDS=10
+CURL_MAX_TIME_SECONDS=30
 
 # Function to fetch latest config
 fetch_config() {
     local tmp_config="/tmp/latest_config.json"
     local http_code
     http_code=$(curl -s -o "$tmp_config" -w "%{http_code}" \
+        --connect-timeout "$CURL_CONNECT_TIMEOUT_SECONDS" \
+        --max-time "$CURL_MAX_TIME_SECONDS" \
         -H "Authorization: Bearer $REGISTRATION_TOKEN" \
         "$CONTROL_PLANE_URL/bot/$BOT_ID/config" 2>/dev/null || echo "000")
 
@@ -306,6 +314,8 @@ fetch_config() {
 # Function to send heartbeat
 send_heartbeat() {
     curl -s -o /dev/null -w "%{http_code}" \
+        --connect-timeout "$CURL_CONNECT_TIMEOUT_SECONDS" \
+        --max-time "$CURL_MAX_TIME_SECONDS" \
         -X POST \
         -H "Authorization: Bearer $REGISTRATION_TOKEN" \
         "$CONTROL_PLANE_URL/bot/$BOT_ID/heartbeat"
@@ -315,6 +325,8 @@ send_heartbeat() {
 ack_config() {
     local config_id=$1
     curl -s -o /dev/null -w "%{http_code}" \
+        --connect-timeout "$CURL_CONNECT_TIMEOUT_SECONDS" \
+        --max-time "$CURL_MAX_TIME_SECONDS" \
         -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $REGISTRATION_TOKEN" \

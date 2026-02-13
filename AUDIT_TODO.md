@@ -63,7 +63,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Extended provisioning script-embed assertions to require the `command -v ufw` guard.
     - Verified with `cargo test --all-targets` (pass).
 
-- [ ] **F-005 Bootstrap `curl` calls lack timeouts**
+- [x] **F-005 Bootstrap `curl` calls lack timeouts**
   - Files: `scripts/openclaw-bootstrap.sh`, `src/application/provisioning.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Add bounded connect and total timeouts to registration/config/heartbeat calls.
@@ -72,6 +72,10 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Extend script-content assertions.
     - `cargo test --all-targets`
+  - Completion note:
+    - Added connect and total timeout controls to registration/config-fetch/heartbeat/config-ack `curl` calls in bootstrap and runner script (`CURL_CONNECT_TIMEOUT_SECONDS`, `CURL_MAX_TIME_SECONDS`).
+    - Extended provisioning embedded-script assertions to require timeout flags.
+    - Verified with `cargo test --all-targets` (pass).
 
 - [ ] **F-006 Incorrect 404 mapping for non-not-found bot read errors**
   - Files: `src/server/http.rs`, `AUDIT_TODO.md`
