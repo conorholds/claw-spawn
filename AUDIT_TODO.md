@@ -35,7 +35,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Added `application::provisioning::tests::f002_should_rollback_create_failure_only_for_fatal_errors`.
     - Verified with `cargo test --all-targets` (pass).
 
-- [ ] **F-003 User-data shell interpolation injection risk**
+- [x] **F-003 User-data shell interpolation injection risk**
   - Files: `src/application/provisioning.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Add shell-safe escaping helper for interpolated env values.
@@ -44,6 +44,10 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Add unit tests for escaping and generated output.
     - `cargo test --all-targets`
+  - Completion note:
+    - Added `shell_escape(...)` and switched user-data string exports to escaped shell-safe single-quoted values.
+    - Added `application::provisioning::tests::f003_shell_escape_wraps_and_escapes_single_quotes` and expanded script-generation assertions for quote-escaping.
+    - Verified with `cargo test --all-targets` (pass).
 
 - [ ] **F-004 Bootstrap can fail on missing `ufw` under `set -e`**
   - Files: `scripts/openclaw-bootstrap.sh`, `src/application/provisioning.rs`, `AUDIT_TODO.md`
