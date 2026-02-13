@@ -12,7 +12,7 @@ categories = ["web-programming::http-server"]
 
 [features]
 default = ["server"]
-server = ["axum", "tokio/rt-multi-thread", "tower-http", "utoipa", "utoipa-swagger-ui"]
+server = ["axum", "tokio/rt-multi-thread", "utoipa", "utoipa-swagger-ui"]
 
 [[bin]]
 name = "claw-spawn-server"
@@ -70,7 +70,6 @@ strum = { version = "0.25", features = ["derive"] }
 
 # Server-only deps (optional)
 axum = { version = "0.7", features = ["tokio", "http1", "json"], optional = true }
-tower-http = { version = "0.5", features = ["trace", "cors"], optional = true }
 
 # CLEAN-004: OpenAPI documentation
 utoipa = { version = "4.1", features = ["axum_extras"], optional = true }

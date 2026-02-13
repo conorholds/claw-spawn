@@ -115,7 +115,7 @@ Legend: `[ ]` pending, `[x]` completed
     - `cargo check --all-targets`
     - `cargo test --all-targets`
 
-- [ ] **F-009 Unused dependency `tower-http`**
+- [x] **F-009 Unused dependency `tower-http`**
   - Files: `Cargo.toml`, `Cargo.lock`, `AUDIT_TODO.md`
   - Planned fix:
     - Remove unused dependency and feature linkage.
@@ -123,6 +123,10 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - `cargo check --all-targets`
     - `cargo clippy --all-targets -- -D warnings`
+  - Completion note:
+    - Removed `tower-http` from `server` feature set and dependency list in `Cargo.toml`.
+    - Regenerated lockfile entries through Cargo resolution.
+    - Verified with `cargo check --all-targets` and `cargo clippy --all-targets -- -D warnings` (pass).
 
 - [ ] **F-010 Sanitization test does not validate sanitization logic**
   - Files: `src/application/provisioning.rs`, `tests/integration_tests.rs`, `AUDIT_TODO.md`
