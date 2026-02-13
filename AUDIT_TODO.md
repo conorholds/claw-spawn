@@ -21,7 +21,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Added `infrastructure::repository::tests::ensure_single_row_affected_returns_not_found_when_no_rows_updated`.
     - Verified with `cargo test --all-targets` (pass).
 
-- [ ] **F-002 Rate-limit flow is rolled back as hard failure**
+- [x] **F-002 Rate-limit flow is rolled back as hard failure**
   - Files: `src/application/provisioning.rs`, `src/server/http.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Classify retryable provisioning failures (DO 429) separately from fatal failures.
@@ -30,6 +30,10 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Add targeted unit test in provisioning module.
     - `cargo test --all-targets`
+  - Completion note:
+    - Added `should_rollback_create_failure(...)` and changed `create_bot(...)` rollback path to skip destructive rollback for `DigitalOceanError::RateLimited`.
+    - Added `application::provisioning::tests::f002_should_rollback_create_failure_only_for_fatal_errors`.
+    - Verified with `cargo test --all-targets` (pass).
 
 - [ ] **F-003 User-data shell interpolation injection risk**
   - Files: `src/application/provisioning.rs`, `AUDIT_TODO.md`
