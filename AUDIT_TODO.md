@@ -91,7 +91,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Added `server::http::tests::map_bot_read_error_maps_expected_status_codes`.
     - Verified with `cargo test --all-targets` (pass).
 
-- [ ] **F-007 `GET /accounts/{id}` is wired but returns 501**
+- [x] **F-007 `GET /accounts/{id}` is wired but returns 501**
   - Files: `src/server/http.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Implement account lookup route using existing repository.
@@ -100,6 +100,10 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Add endpoint-level unit tests for not found and success path helpers.
     - `cargo test --all-targets`
+  - Completion note:
+    - Implemented `GET /accounts/{id}` using `AccountRepository::get_by_id`, with explicit status mapping (`200/404/500`) and updated OpenAPI response docs.
+    - Added `server::http::tests::map_account_read_error_maps_expected_status_codes`.
+    - Verified with `cargo test --all-targets` (pass).
 
 - [ ] **F-008 Oversized modules reduce maintainability**
   - Files: `src/server/http.rs`, `src/server/http_types.rs`, `src/server/http_auth.rs`, `src/server/http_parse.rs`, `src/server/http_errors.rs`, `AUDIT_TODO.md`

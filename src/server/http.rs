@@ -127,6 +127,18 @@ fn map_bot_read_error(err: &LifecycleError) -> (StatusCode, serde_json::Value) {
     }
 }
 
+fn map_account_read_error(err: &RepositoryError) -> (StatusCode, serde_json::Value) {
+    match err {
+        RepositoryError::NotFound(_) => {
+            (StatusCode::NOT_FOUND, serde_json::json!({ "error": "Account not found" }))
+        }
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            serde_json::json!({ "error": "Failed to get account" }),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,6 +224,17 @@ mod tests {
             map_bot_read_error(&LifecycleError::Repository(RepositoryError::InvalidData(
                 "bad".to_string(),
             )));
+        assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn map_account_read_error_maps_expected_status_codes() {
+        let (status_not_found, _) =
+            map_account_read_error(&RepositoryError::NotFound("missing".to_string()));
+        assert_eq!(status_not_found, StatusCode::NOT_FOUND);
+
+        let (status_internal, _) =
+            map_account_read_error(&RepositoryError::InvalidData("bad".to_string()));
         assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
@@ -367,11 +390,15 @@ async fn create_account(
     path = "/accounts/{id}",
     tag = "Accounts",
     params(("id" = Uuid, Path, description = "Account ID")),
-    responses((status = 501, description = "Not implemented"))
+    responses(
+        (status = 200, description = "Account found", body = Object),
+        (status = 404, description = "Account not found", body = Object),
+        (status = 500, description = "Failed to get account", body = Object)
+    )
 )]
 async fn get_account(
     State(state): State<AppState>,
-    Path(_id): Path<Uuid>,
+    Path(id): Path<Uuid>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     if !is_admin_authorized(&headers, &state.api_bearer_token) {
@@ -381,10 +408,13 @@ async fn get_account(
         );
     }
 
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        Json(serde_json::json!({"error": "Get account not implemented"})),
-    )
+    match state.account_repo.get_by_id(id).await {
+        Ok(account) => (StatusCode::OK, Json(serde_json::json!(account))),
+        Err(e) => {
+            let (status, body) = map_account_read_error(&e);
+            (status, Json(body))
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, IntoParams, ToSchema)]
