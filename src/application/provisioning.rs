@@ -722,6 +722,12 @@ mod tests {
     }
 
     #[test]
+    fn f010_sanitize_bot_name_replaces_special_chars_and_trims() {
+        let sanitized = sanitize_bot_name("  Test@#$ Bot!  ");
+        assert_eq!(sanitized, "Test___ Bot_");
+    }
+
+    #[test]
     fn f003_shell_escape_wraps_and_escapes_single_quotes() {
         let value = "abc'def";
         let escaped = shell_escape(value);

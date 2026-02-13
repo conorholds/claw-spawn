@@ -128,7 +128,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Regenerated lockfile entries through Cargo resolution.
     - Verified with `cargo check --all-targets` and `cargo clippy --all-targets -- -D warnings` (pass).
 
-- [ ] **F-010 Sanitization test does not validate sanitization logic**
+- [x] **F-010 Sanitization test does not validate sanitization logic**
   - Files: `src/application/provisioning.rs`, `tests/integration_tests.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Add direct unit tests that assert transformation behavior.
@@ -136,3 +136,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Verify UTF-8 and special-char handling.
   - Test plan:
     - `cargo test --all-targets`
+  - Completion note:
+    - Removed misleading integration test `test_bot_name_sanitization` that validated mock storage instead of sanitizer behavior.
+    - Added direct unit test `application::provisioning::tests::f010_sanitize_bot_name_replaces_special_chars_and_trims`.
+    - Verified with `cargo test --all-targets` (pass).

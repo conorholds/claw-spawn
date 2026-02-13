@@ -797,33 +797,6 @@ async fn test_pagination() {
 }
 
 #[tokio::test]
-async fn test_bot_name_sanitization() {
-    // This test verifies the sanitize_bot_name logic is applied
-    // In real code, this would be called before creating a bot
-
-    // Test cases that would be sanitized:
-    // - "Test Bot" -> "Test Bot" (valid)
-    // - "Test@Bot" -> "Test_Bot" (special char replaced)
-    // - "   Test   " -> "Test" (trimmed)
-    // - Very long name -> truncated to 64 chars
-
-    // Since sanitize_bot_name is private in provisioning.rs,
-    // we verify it works by checking the bot name doesn't cause issues
-    let bot_repo = Arc::new(MockBotRepository::default());
-    let account_id = Uuid::new_v4();
-
-    // Bot with special chars - should be stored fine
-    let bot = Bot::new(account_id, "Test@#$Bot".to_string(), Persona::Beginner);
-    bot_repo
-        .create(&bot)
-        .await
-        .expect("Failed to create bot with special chars");
-
-    let retrieved = bot_repo.get_by_id(bot.id).await.expect("Failed to get bot");
-    assert_eq!(retrieved.name, "Test@#$Bot"); // In mock, stored as-is
-}
-
-#[tokio::test]
 async fn test_config_version_conflict_detection() {
     let config_repo = Arc::new(MockConfigRepository::default());
     let bot_repo = Arc::new(MockBotRepository::default());
