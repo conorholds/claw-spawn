@@ -49,7 +49,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Added `application::provisioning::tests::f003_shell_escape_wraps_and_escapes_single_quotes` and expanded script-generation assertions for quote-escaping.
     - Verified with `cargo test --all-targets` (pass).
 
-- [ ] **F-004 Bootstrap can fail on missing `ufw` under `set -e`**
+- [x] **F-004 Bootstrap can fail on missing `ufw` under `set -e`**
   - Files: `scripts/openclaw-bootstrap.sh`, `src/application/provisioning.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Guard firewall setup with `command -v ufw`.
@@ -58,6 +58,10 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Extend provisioning script-content assertions.
     - `cargo test --all-targets`
+  - Completion note:
+    - Updated bootstrap firewall section to run only when `ufw` is installed and emit a warning otherwise.
+    - Extended provisioning script-embed assertions to require the `command -v ufw` guard.
+    - Verified with `cargo test --all-targets` (pass).
 
 - [ ] **F-005 Bootstrap `curl` calls lack timeouts**
   - Files: `scripts/openclaw-bootstrap.sh`, `src/application/provisioning.rs`, `AUDIT_TODO.md`

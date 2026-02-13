@@ -385,10 +385,14 @@ chown openclaw:openclaw /var/log/openclaw-bot.log
 
 # Setup firewall
 echo "=== Configuring Firewall ==="
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh
-ufw --force enable
+if command -v ufw >/dev/null 2>&1; then
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow ssh
+    ufw --force enable
+else
+    echo "WARN: ufw not installed; skipping firewall setup"
+fi
 
 # Start the bot service
 echo "=== Starting Bot Service ==="

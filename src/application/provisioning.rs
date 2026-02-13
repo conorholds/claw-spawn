@@ -604,6 +604,7 @@ mod tests {
         assert!(embedded.contains("<< EOFSERVICE"));
         assert!(!embedded.contains("<< 'EOFSERVICE'"));
         assert!(embedded.contains("HB_RESULT=$(send_heartbeat || echo \"000\")"));
+        assert!(embedded.contains("if command -v ufw >/dev/null 2>&1; then"));
     }
 
     struct TestErr;
