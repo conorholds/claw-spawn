@@ -77,7 +77,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Extended provisioning embedded-script assertions to require timeout flags.
     - Verified with `cargo test --all-targets` (pass).
 
-- [ ] **F-006 Incorrect 404 mapping for non-not-found bot read errors**
+- [x] **F-006 Incorrect 404 mapping for non-not-found bot read errors**
   - Files: `src/server/http.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Differentiate repository not-found from infrastructure/internal errors.
@@ -86,6 +86,10 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - Add handler error mapping tests.
     - `cargo test --all-targets`
+  - Completion note:
+    - Added `map_bot_read_error(...)` in HTTP layer to return `404` only for `RepositoryError::NotFound` and `500` for internal failures.
+    - Added `server::http::tests::map_bot_read_error_maps_expected_status_codes`.
+    - Verified with `cargo test --all-targets` (pass).
 
 - [ ] **F-007 `GET /accounts/{id}` is wired but returns 501**
   - Files: `src/server/http.rs`, `AUDIT_TODO.md`

@@ -1,5 +1,5 @@
 use super::state::AppState;
-use crate::application::ProvisioningError;
+use crate::application::{LifecycleError, ProvisioningError};
 use crate::domain::{
     Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona, RiskConfig,
     SignalKnobs, StrictnessLevel, TradingConfig,
@@ -115,6 +115,18 @@ fn map_bot_action_error(err: &ProvisioningError) -> (StatusCode, serde_json::Val
     }
 }
 
+fn map_bot_read_error(err: &LifecycleError) -> (StatusCode, serde_json::Value) {
+    match err {
+        LifecycleError::Repository(RepositoryError::NotFound(_)) => {
+            (StatusCode::NOT_FOUND, serde_json::json!({ "error": "Bot not found" }))
+        }
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            serde_json::json!({ "error": "Failed to fetch bot" }),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,6 +198,21 @@ mod tests {
         let (status_rate_limited, _) =
             map_bot_action_error(&ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited));
         assert_eq!(status_rate_limited, StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[test]
+    fn map_bot_read_error_maps_expected_status_codes() {
+        let (status_not_found, _) =
+            map_bot_read_error(&LifecycleError::Repository(RepositoryError::NotFound(
+                "missing".to_string(),
+            )));
+        assert_eq!(status_not_found, StatusCode::NOT_FOUND);
+
+        let (status_internal, _) =
+            map_bot_read_error(&LifecycleError::Repository(RepositoryError::InvalidData(
+                "bad".to_string(),
+            )));
+        assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
 
@@ -616,10 +643,10 @@ async fn get_bot(
             StatusCode::OK,
             Json(serde_json::json!(BotResponse::from(bot))),
         ),
-        Err(_) => (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "Bot not found"})),
-        ),
+        Err(e) => {
+            let (status, body) = map_bot_read_error(&e);
+            (status, Json(body))
+        }
     }
 }
 
