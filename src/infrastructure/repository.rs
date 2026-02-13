@@ -2,7 +2,7 @@ use crate::domain::{Account, Bot, BotStatus, Droplet, Persona, StoredBotConfig, 
 use async_trait::async_trait;
 use chrono::Utc;
 use sha2::{Digest, Sha256};
-use sqlx::{PgPool, Row};
+use sqlx::{postgres::PgQueryResult, PgPool, Row};
 use std::str::FromStr;
 use thiserror::Error;
 use uuid::Uuid;
@@ -234,7 +234,7 @@ impl AccountRepository for PostgresAccountRepository {
             SubscriptionTier::Pro => 4,
         };
 
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE accounts
             SET subscription_tier = $1, max_bots = $2, updated_at = $3
@@ -247,6 +247,8 @@ impl AccountRepository for PostgresAccountRepository {
         .bind(id)
         .execute(&self.pool)
         .await?;
+
+        ensure_single_row_affected(result, "Account", id)?;
 
         Ok(())
     }
@@ -289,6 +291,17 @@ impl PostgresBotRepository {
 fn hash_registration_token(token: &str) -> String {
     let digest = Sha256::digest(token.as_bytes());
     format!("sha256:{:x}", digest)
+}
+
+fn ensure_single_row_affected(
+    result: PgQueryResult,
+    resource: &str,
+    id: impl std::fmt::Display,
+) -> Result<(), RepositoryError> {
+    if result.rows_affected() == 0 {
+        return Err(RepositoryError::NotFound(format!("{resource} {id}")));
+    }
+    Ok(())
 }
 
 #[async_trait]
@@ -433,7 +446,7 @@ impl BotRepository for PostgresBotRepository {
     async fn update_status(&self, id: Uuid, status: BotStatus) -> Result<(), RepositoryError> {
         let status_str = status.to_string();
 
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE bots
             SET status = $1, updated_at = $2
@@ -446,6 +459,8 @@ impl BotRepository for PostgresBotRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Bot", id)?;
+
         Ok(())
     }
 
@@ -454,7 +469,7 @@ impl BotRepository for PostgresBotRepository {
         bot_id: Uuid,
         droplet_id: Option<i64>,
     ) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE bots
             SET droplet_id = $1, updated_at = $2
@@ -467,6 +482,8 @@ impl BotRepository for PostgresBotRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Bot", bot_id)?;
+
         Ok(())
     }
 
@@ -476,7 +493,7 @@ impl BotRepository for PostgresBotRepository {
         desired: Option<Uuid>,
         applied: Option<Uuid>,
     ) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE bots
             SET desired_config_version_id = $1, applied_config_version_id = $2, updated_at = $3
@@ -490,11 +507,13 @@ impl BotRepository for PostgresBotRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Bot", bot_id)?;
+
         Ok(())
     }
 
     async fn update_heartbeat(&self, bot_id: Uuid) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE bots
             SET last_heartbeat_at = $1, updated_at = $2
@@ -507,6 +526,8 @@ impl BotRepository for PostgresBotRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Bot", bot_id)?;
+
         Ok(())
     }
 
@@ -516,7 +537,7 @@ impl BotRepository for PostgresBotRepository {
         token: &str,
     ) -> Result<(), RepositoryError> {
         let hashed_token = hash_registration_token(token);
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE bots
             SET registration_token = $1, updated_at = $2
@@ -529,11 +550,13 @@ impl BotRepository for PostgresBotRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Bot", bot_id)?;
+
         Ok(())
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE bots
             SET status = 'destroyed', updated_at = $1
@@ -545,11 +568,13 @@ impl BotRepository for PostgresBotRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Bot", id)?;
+
         Ok(())
     }
 
     async fn hard_delete(&self, id: Uuid) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             DELETE FROM bots
             WHERE id = $1
@@ -558,6 +583,8 @@ impl BotRepository for PostgresBotRepository {
         .bind(id)
         .execute(&self.pool)
         .await?;
+
+        ensure_single_row_affected(result, "Bot", id)?;
 
         Ok(())
     }
@@ -650,7 +677,8 @@ fn row_to_bot(row: &sqlx::postgres::PgRow) -> Result<Bot, RepositoryError> {
 
 #[cfg(test)]
 mod tests {
-    use super::hash_registration_token;
+    use super::{ensure_single_row_affected, hash_registration_token, RepositoryError};
+    use sqlx::postgres::PgQueryResult;
 
     #[test]
     fn hash_registration_token_is_stable_and_prefixed() {
@@ -661,5 +689,12 @@ mod tests {
         assert_eq!(hashed, hashed_again);
         assert!(hashed.starts_with("sha256:"));
         assert_ne!(hashed, token);
+    }
+
+    #[test]
+    fn ensure_single_row_affected_returns_not_found_when_no_rows_updated() {
+        let result = PgQueryResult::default();
+        let err = ensure_single_row_affected(result, "Bot", "missing").unwrap_err();
+        assert!(matches!(err, RepositoryError::NotFound(_)));
     }
 }

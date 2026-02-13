@@ -1,110 +1,110 @@
-# Audit Remediation Checklist
+# Audit Master Checklist
 
 Legend: `[ ]` pending, `[x]` completed
 
-## Critical
+## Priority Order
+1. Critical/High correctness and security
+2. High-impact performance and reliability
+3. Cleanup and maintainability
 
-- [x] **F-001 Enforce authentication on privileged control-plane routes**
-  - Files: `src/server/http.rs`, `src/server/state.rs`, `src/infrastructure/config.rs`, `.env.example`, `README.md`, `tests/integration_tests.rs`
+- [x] **F-001 Silent no-op repository updates return success**
+  - Files: `src/infrastructure/repository.rs`, `tests/integration_tests.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Add explicit admin bearer-token config and wire it into app state.
-    - Require admin bearer auth on privileged routes (`/accounts`, `/bots`, `/accounts/:id/bots`, `/bots/:id`, `/bots/:id/config`, `/bots/:id/actions`).
-    - Keep bot registration-token auth only on `/bot/*` agent routes.
+    - Validate `rows_affected()` for write operations that target a single row.
+    - Return `RepositoryError::NotFound(...)` when no row is updated/deleted.
+    - Add repository-level verification via integration mock behavior.
   - Test plan:
-    - Add unit tests for admin bearer extraction/validation.
-    - Run `cargo test`, `cargo check`.
-  - Completion note: Added `CLAW_API_BEARER_TOKEN` config/state wiring; privileged `/accounts` + `/bots` routes now require matching bearer token. Verified with `server::http::tests::is_admin_authorized_requires_exact_bearer_match`, `cargo check`, and full `cargo test`.
+    - `cargo test --all-targets`
+    - Focus: lifecycle/actions paths that call update/delete methods.
+  - Completion note:
+    - Added `ensure_single_row_affected(...)` and wired it into single-row account/bot update/delete methods in `PostgresAccountRepository` and `PostgresBotRepository`.
+    - Added `infrastructure::repository::tests::ensure_single_row_affected_returns_not_found_when_no_rows_updated`.
+    - Verified with `cargo test --all-targets` (pass).
 
-- [x] **F-002 Fix systemd environment interpolation in bootstrap script**
-  - Files: `scripts/openclaw-bootstrap.sh`
+- [ ] **F-002 Rate-limit flow is rolled back as hard failure**
+  - Files: `src/application/provisioning.rs`, `src/server/http.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Change service-file generation so env vars are rendered as concrete values, not literal `${...}` placeholders.
-    - Keep sensitive-token handling compatible with existing runner behavior.
+    - Classify retryable provisioning failures (DO 429) separately from fatal failures.
+    - Keep bot row/counter for retryable failures and only rollback fatal failures.
+    - Preserve existing API semantics (`429` on create).
   - Test plan:
-    - Add script-level assertion test in Rust provisioning tests that generated script does not contain literal placeholders in systemd env lines.
-    - Run `cargo test`.
-  - Completion note: Switched systemd service heredoc to unquoted delimiter so bootstrap env vars are rendered into unit `Environment=` lines. Verified via `application::provisioning::tests::f002_user_data_exports_customizer_and_toolchain_values` and full `cargo test`.
+    - Add targeted unit test in provisioning module.
+    - `cargo test --all-targets`
 
-## High
-
-- [x] **F-003 Prevent partial DB state during bot creation failures**
-  - Files: `src/infrastructure/repository.rs`, `src/application/provisioning.rs`, `tests/integration_tests.rs`, `src/application/provisioning.rs` (tests)
+- [ ] **F-003 User-data shell interpolation injection risk**
+  - Files: `src/application/provisioning.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Add rollback-capable hard delete path in repository.
-    - On create flow failure, perform rollback cleanup to avoid orphaned bot/config rows.
-    - Ensure bot counter decrement still occurs and rollback errors are logged with context.
+    - Add shell-safe escaping helper for interpolated env values.
+    - Apply escaping to all interpolated user-data exports.
+    - Verify generated script behavior with special characters.
   - Test plan:
-    - Add/extend service tests to simulate failures after bot row creation and verify rollback path is invoked.
-    - Run `cargo test`.
-  - Completion note: Added `BotRepository::hard_delete` rollback path and invoked it on `create_bot` failure before counter decrement. Added failure-injection test `application::provisioning::tests::f005_create_bot_rolls_back_partial_state_when_config_create_fails`. Verified with full `cargo test`.
+    - Add unit tests for escaping and generated output.
+    - `cargo test --all-targets`
 
-- [x] **F-004 Fix Docker healthcheck dependency mismatch**
-  - Files: `Dockerfile`
+- [ ] **F-004 Bootstrap can fail on missing `ufw` under `set -e`**
+  - Files: `scripts/openclaw-bootstrap.sh`, `src/application/provisioning.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Install `curl` in runtime image used by Docker `HEALTHCHECK`.
+    - Guard firewall setup with `command -v ufw`.
+    - Keep setup behavior unchanged when `ufw` is present.
+    - Log explicit warning when `ufw` is absent.
   - Test plan:
-    - Run `docker build` (or syntax/build validation) and ensure Dockerfile remains valid.
-    - Run `cargo check` for regression safety.
-  - Completion note: Added `curl` to runtime apt packages so Docker `HEALTHCHECK` command has its required binary. Verified with `cargo check`; attempted `docker build -t claw-spawn:audit-f004 .` but local Docker session was blocked (`only one connection allowed`).
+    - Extend provisioning script-content assertions.
+    - `cargo test --all-targets`
 
-- [x] **F-005 Stop storing registration tokens in plaintext**
-  - Files: `src/infrastructure/repository.rs`, `Cargo.toml`, `Cargo.lock`, `tests/integration_tests.rs` (if needed)
+- [ ] **F-005 Bootstrap `curl` calls lack timeouts**
+  - Files: `scripts/openclaw-bootstrap.sh`, `src/application/provisioning.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Hash registration tokens before persistence.
-    - Support both hashed and legacy plaintext rows during lookup for safe migration.
-    - Keep public API behavior unchanged for callers.
+    - Add bounded connect and total timeouts to registration/config/heartbeat calls.
+    - Preserve retry/backoff behavior.
+    - Keep response handling unchanged.
   - Test plan:
-    - Add unit test for token hashing/lookup behavior in repository layer.
-    - Run `cargo test`.
-  - Completion note: Added SHA-256 token hashing at write time (`sha256:<hex>` format) and backward-compatible lookup (`plaintext OR hash`) for legacy rows. Added `infrastructure::repository::tests::hash_registration_token_is_stable_and_prefixed`; verified with full `cargo test`.
+    - Extend script-content assertions.
+    - `cargo test --all-targets`
 
-## Medium
-
-- [x] **F-006 Make bot-name truncation UTF-8 safe**
-  - Files: `src/application/provisioning.rs`
+- [ ] **F-006 Incorrect 404 mapping for non-not-found bot read errors**
+  - Files: `src/server/http.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Replace byte-slice truncation with char-based truncation.
+    - Differentiate repository not-found from infrastructure/internal errors.
+    - Return `500` for internal failures.
+    - Keep `404` for true missing resources.
   - Test plan:
-    - Add unit test with multibyte input > max length; ensure no panic and bounded length.
-    - Run `cargo test`.
-  - Completion note: Replaced byte slicing with char-based truncation in `sanitize_bot_name`, preventing UTF-8 boundary panics. Added `application::provisioning::tests::f006_sanitize_bot_name_truncates_multibyte_input_safely`; verified with full `cargo test`.
+    - Add handler error mapping tests.
+    - `cargo test --all-targets`
 
-- [x] **F-007 Prefer public IPv4 when parsing droplet IP**
-  - Files: `src/domain/droplet.rs`
+- [ ] **F-007 `GET /accounts/{id}` is wired but returns 501**
+  - Files: `src/server/http.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Select first `networks.v4` entry where `type_ == "public"`, fallback to `None`.
+    - Implement account lookup route using existing repository.
+    - Return `404` when account missing and `500` on internal errors.
+    - Update OpenAPI response docs accordingly.
   - Test plan:
-    - Add unit tests for mixed private/public ordering and missing public network.
-    - Run `cargo test`.
-  - Completion note: `Droplet::from_do_response` now selects the first `type_ == \"public\"` IPv4, avoiding private IP persistence. Added tests `domain::droplet::tests::from_do_response_prefers_public_ipv4` and `domain::droplet::tests::from_do_response_handles_missing_public_ipv4`; verified with full `cargo test`.
+    - Add endpoint-level unit tests for not found and success path helpers.
+    - `cargo test --all-targets`
 
-- [x] **F-008 Return precise HTTP status codes for bot actions**
-  - Files: `src/server/http.rs`
+- [ ] **F-008 Oversized modules reduce maintainability**
+  - Files: `src/server/http.rs`, `src/server/http_types.rs`, `src/server/http_auth.rs`, `src/server/http_parse.rs`, `src/server/http_errors.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Map known domain failures to 400/404/409/429 where appropriate instead of blanket 500.
-    - Preserve generic 500 fallback for unexpected failures.
+    - Split `http.rs` into focused internal modules (types/auth/parsing/errors).
+    - Keep existing route behavior and signatures stable.
+    - Avoid cross-cutting refactors outside server module.
   - Test plan:
-    - Add handler-level tests for invalid action and representative error mapping.
-    - Run `cargo test`.
-  - Completion note: Added explicit `ProvisioningError` -> HTTP status mapping for bot actions (400/404/429 + fallback 500) and removed blanket 500 behavior. Added `server::http::tests::map_bot_action_error_maps_expected_status_codes`; verified with full `cargo test`.
+    - `cargo check --all-targets`
+    - `cargo test --all-targets`
 
-- [x] **F-009 Make heartbeat loop resilient to transient command failures**
-  - Files: `scripts/openclaw-bootstrap.sh`
+- [ ] **F-009 Unused dependency `tower-http`**
+  - Files: `Cargo.toml`, `Cargo.lock`, `AUDIT_TODO.md`
   - Planned fix:
-    - Ensure heartbeat command failure does not terminate runner loop under `set -e`.
+    - Remove unused dependency and feature linkage.
+    - Verify no code paths require it.
   - Test plan:
-    - Add script-generation test asserting resilient heartbeat command form.
-    - Run `cargo test`.
-  - Completion note: Updated runner loop heartbeat capture to `HB_RESULT=$(send_heartbeat || echo \"000\")` so transient curl failures do not terminate under `set -e`. Verified by script assertion in `application::provisioning::tests::f002_user_data_exports_customizer_and_toolchain_values` and full `cargo test`.
+    - `cargo check --all-targets`
+    - `cargo clippy --all-targets -- -D warnings`
 
-## Low
-
-- [x] **F-010 Remove dead code and tighten maintenance checks**
-  - Files: `src/application/provisioning.rs`, `src/infrastructure/digital_ocean.rs`, `Cargo.toml`, `Cargo.lock`, `tests/integration_tests.rs`, `.github/workflows/ci.yml`
+- [ ] **F-010 Sanitization test does not validate sanitization logic**
+  - Files: `src/application/provisioning.rs`, `tests/integration_tests.rs`, `AUDIT_TODO.md`
   - Planned fix:
-    - Remove unused `sync_droplet_status` and dead error variant.
-    - Remove unused dependencies.
-    - Improve pagination mock fidelity and tighten CI clippy scope.
+    - Add direct unit tests that assert transformation behavior.
+    - Replace or trim misleading integration test coverage.
+    - Verify UTF-8 and special-char handling.
   - Test plan:
-    - Run `cargo check`, `cargo clippy --all-targets`, `cargo test`.
-  - Completion note: Removed dead `sync_droplet_status` and unused `DigitalOceanError::MaxRetriesExceeded`, removed unused dependencies, improved integration mock pagination to enforce limit/offset behavior, and tightened CI clippy invocation to `--all-targets`. Verified with `cargo check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test`.
+    - `cargo test --all-targets`
