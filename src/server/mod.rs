@@ -5,6 +5,10 @@
 //! - **Embedded**: host Axum app calls `router(state)` (and may nest it)
 
 mod http;
+mod http_auth;
+mod http_errors;
+mod http_parse;
+mod http_types;
 mod state;
 
 pub use http::router;

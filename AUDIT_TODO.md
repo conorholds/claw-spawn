@@ -105,7 +105,7 @@ Legend: `[ ]` pending, `[x]` completed
     - Added `server::http::tests::map_account_read_error_maps_expected_status_codes`.
     - Verified with `cargo test --all-targets` (pass).
 
-- [ ] **F-008 Oversized modules reduce maintainability**
+- [x] **F-008 Oversized modules reduce maintainability**
   - Files: `src/server/http.rs`, `src/server/http_types.rs`, `src/server/http_auth.rs`, `src/server/http_parse.rs`, `src/server/http_errors.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Split `http.rs` into focused internal modules (types/auth/parsing/errors).
@@ -114,6 +114,10 @@ Legend: `[ ]` pending, `[x]` completed
   - Test plan:
     - `cargo check --all-targets`
     - `cargo test --all-targets`
+  - Completion note:
+    - Split HTTP concerns out of `src/server/http.rs` into focused modules: `src/server/http_auth.rs`, `src/server/http_parse.rs`, `src/server/http_errors.rs`, and `src/server/http_types.rs`.
+    - Updated `src/server/mod.rs` module wiring and kept route handler behavior unchanged.
+    - Verified with `cargo check --all-targets` and `cargo test --all-targets` (pass).
 
 - [x] **F-009 Unused dependency `tower-http`**
   - Files: `Cargo.toml`, `Cargo.lock`, `AUDIT_TODO.md`

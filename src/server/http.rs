@@ -1,20 +1,29 @@
 use super::state::AppState;
-use crate::application::{LifecycleError, ProvisioningError};
-use crate::domain::{
-    Account, AlgorithmMode, AssetFocus, Bot, BotConfig, BotSecrets, Persona, RiskConfig,
-    SignalKnobs, StrictnessLevel, TradingConfig,
+use super::{
+    http_auth::{extract_bearer_token, is_admin_authorized},
+    http_errors::{map_account_read_error, map_bot_action_error, map_bot_read_error},
+    http_parse::{
+        parse_algorithm, parse_asset_focus, parse_persona, parse_strictness, parse_subscription_tier,
+    },
+    http_types::{
+        AckConfigRequest, BotActionRequest, BotResponse, CreateAccountRequest, CreateBotRequest,
+        HealthResponse, PaginationParams, RegisterBotRequest,
+    },
 };
-use crate::infrastructure::{AccountRepository, DigitalOceanError, RepositoryError};
+use crate::application::ProvisioningError;
+use crate::domain::{
+    Account, BotConfig, BotSecrets, Persona, RiskConfig, SignalKnobs, StrictnessLevel, TradingConfig,
+};
+use crate::infrastructure::{AccountRepository, DigitalOceanError};
 use axum::{
     extract::{Path, Query, State},
-    http::{header, header::HeaderMap, StatusCode},
+    http::{header::HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
 use tracing::{error, info};
-use utoipa::{IntoParams, OpenApi, ToSchema};
+use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use uuid::Uuid;
 
@@ -36,113 +45,10 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
-    headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
-        .filter(|t| !t.is_empty())
-}
-
-fn is_admin_authorized(headers: &HeaderMap, expected_token: &str) -> bool {
-    !expected_token.is_empty() && extract_bearer_token(headers) == Some(expected_token)
-}
-
-fn parse_subscription_tier(tier: &str) -> Option<crate::domain::SubscriptionTier> {
-    match tier {
-        "free" => Some(crate::domain::SubscriptionTier::Free),
-        "basic" => Some(crate::domain::SubscriptionTier::Basic),
-        "pro" => Some(crate::domain::SubscriptionTier::Pro),
-        _ => None,
-    }
-}
-
-fn parse_persona(persona: &str) -> Option<Persona> {
-    match persona {
-        "beginner" => Some(Persona::Beginner),
-        "tweaker" => Some(Persona::Tweaker),
-        "quant_lite" => Some(Persona::QuantLite),
-        _ => None,
-    }
-}
-
-fn parse_asset_focus(asset_focus: &str) -> Option<AssetFocus> {
-    match asset_focus {
-        "majors" => Some(AssetFocus::Majors),
-        "memes" => Some(AssetFocus::Memes),
-        _ => None,
-    }
-}
-
-fn parse_algorithm(algorithm: &str) -> Option<AlgorithmMode> {
-    match algorithm {
-        "trend" => Some(AlgorithmMode::Trend),
-        "mean_reversion" => Some(AlgorithmMode::MeanReversion),
-        "breakout" => Some(AlgorithmMode::Breakout),
-        _ => None,
-    }
-}
-
-fn parse_strictness(strictness: &str) -> Option<StrictnessLevel> {
-    match strictness {
-        "low" => Some(StrictnessLevel::Low),
-        "medium" => Some(StrictnessLevel::Medium),
-        "high" => Some(StrictnessLevel::High),
-        _ => None,
-    }
-}
-
-fn map_bot_action_error(err: &ProvisioningError) -> (StatusCode, serde_json::Value) {
-    match err {
-        ProvisioningError::InvalidConfig(msg) => {
-            (StatusCode::BAD_REQUEST, serde_json::json!({ "error": msg }))
-        }
-        ProvisioningError::Repository(RepositoryError::NotFound(_)) => {
-            (StatusCode::NOT_FOUND, serde_json::json!({ "error": "Bot not found" }))
-        }
-        ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited) => (
-            StatusCode::TOO_MANY_REQUESTS,
-            serde_json::json!({ "error": "Rate limited by DigitalOcean, please retry" }),
-        ),
-        ProvisioningError::DigitalOcean(DigitalOceanError::NotFound(_)) => (
-            StatusCode::NOT_FOUND,
-            serde_json::json!({ "error": "Associated droplet not found" }),
-        ),
-        _ => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            serde_json::json!({ "error": "Action failed" }),
-        ),
-    }
-}
-
-fn map_bot_read_error(err: &LifecycleError) -> (StatusCode, serde_json::Value) {
-    match err {
-        LifecycleError::Repository(RepositoryError::NotFound(_)) => {
-            (StatusCode::NOT_FOUND, serde_json::json!({ "error": "Bot not found" }))
-        }
-        _ => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            serde_json::json!({ "error": "Failed to fetch bot" }),
-        ),
-    }
-}
-
-fn map_account_read_error(err: &RepositoryError) -> (StatusCode, serde_json::Value) {
-    match err {
-        RepositoryError::NotFound(_) => {
-            (StatusCode::NOT_FOUND, serde_json::json!({ "error": "Account not found" }))
-        }
-        _ => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            serde_json::json!({ "error": "Failed to get account" }),
-        ),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::HeaderValue;
+    use axum::http::{header, HeaderValue};
 
     #[test]
     fn extract_bearer_token_happy_path() {
@@ -203,7 +109,7 @@ mod tests {
         assert_eq!(status_invalid, StatusCode::BAD_REQUEST);
 
         let (status_not_found, _) = map_bot_action_error(&ProvisioningError::Repository(
-            RepositoryError::NotFound("missing".to_string()),
+            crate::infrastructure::RepositoryError::NotFound("missing".to_string()),
         ));
         assert_eq!(status_not_found, StatusCode::NOT_FOUND);
 
@@ -214,27 +120,27 @@ mod tests {
 
     #[test]
     fn map_bot_read_error_maps_expected_status_codes() {
-        let (status_not_found, _) =
-            map_bot_read_error(&LifecycleError::Repository(RepositoryError::NotFound(
-                "missing".to_string(),
-            )));
+        let (status_not_found, _) = map_bot_read_error(&crate::application::LifecycleError::Repository(
+            crate::infrastructure::RepositoryError::NotFound("missing".to_string()),
+        ));
         assert_eq!(status_not_found, StatusCode::NOT_FOUND);
 
-        let (status_internal, _) =
-            map_bot_read_error(&LifecycleError::Repository(RepositoryError::InvalidData(
-                "bad".to_string(),
-            )));
+        let (status_internal, _) = map_bot_read_error(&crate::application::LifecycleError::Repository(
+            crate::infrastructure::RepositoryError::InvalidData("bad".to_string()),
+        ));
         assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[test]
     fn map_account_read_error_maps_expected_status_codes() {
-        let (status_not_found, _) =
-            map_account_read_error(&RepositoryError::NotFound("missing".to_string()));
+        let (status_not_found, _) = map_account_read_error(
+            &crate::infrastructure::RepositoryError::NotFound("missing".to_string()),
+        );
         assert_eq!(status_not_found, StatusCode::NOT_FOUND);
 
-        let (status_internal, _) =
-            map_account_read_error(&RepositoryError::InvalidData("bad".to_string()));
+        let (status_internal, _) = map_account_read_error(
+            &crate::infrastructure::RepositoryError::InvalidData("bad".to_string()),
+        );
         assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
@@ -282,14 +188,6 @@ mod tests {
 )]
 struct ApiDoc;
 
-/// Health check response
-#[derive(Serialize, ToSchema)]
-struct HealthResponse {
-    status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-}
-
 /// Health check endpoint
 ///
 /// Verifies database connectivity and returns service health status.
@@ -322,15 +220,6 @@ async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
             )
         }
     }
-}
-
-/// Create account request
-#[derive(Deserialize, ToSchema)]
-struct CreateAccountRequest {
-    #[schema(example = "user-123")]
-    external_id: String,
-    #[schema(example = "pro")]
-    tier: String,
 }
 
 /// Create a new account
@@ -417,20 +306,6 @@ async fn get_account(
     }
 }
 
-#[derive(Deserialize, Debug, IntoParams, ToSchema)]
-struct PaginationParams {
-    #[serde(default = "default_limit")]
-    #[param(default = 100, maximum = 1000)]
-    limit: i64,
-    #[serde(default)]
-    #[param(default = 0)]
-    offset: i64,
-}
-
-fn default_limit() -> i64 {
-    100
-}
-
 const MAX_PAGINATION_LIMIT: i64 = 1000;
 
 #[utoipa::path(
@@ -476,23 +351,6 @@ async fn list_bots(
             )
         }
     }
-}
-
-#[derive(Deserialize, ToSchema)]
-struct CreateBotRequest {
-    account_id: Uuid,
-    name: String,
-    persona: String,
-    asset_focus: String,
-    algorithm: String,
-    strictness: String,
-    paper_mode: bool,
-    max_position_size_pct: f64,
-    max_daily_loss_pct: f64,
-    max_drawdown_pct: f64,
-    max_trades_per_day: i32,
-    llm_provider: String,
-    llm_api_key: String,
 }
 
 #[utoipa::path(
@@ -716,11 +574,6 @@ async fn get_bot_config(
     }
 }
 
-#[derive(Deserialize, ToSchema)]
-struct BotActionRequest {
-    action: String,
-}
-
 #[utoipa::path(
     post,
     path = "/bots/{id}/actions",
@@ -766,11 +619,6 @@ async fn bot_action(
     }
 }
 
-#[derive(Deserialize, ToSchema)]
-struct RegisterBotRequest {
-    bot_id: Uuid,
-}
-
 #[utoipa::path(
     post,
     path = "/bot/register",
@@ -809,11 +657,6 @@ async fn register_bot(
             Json(serde_json::json!({"error": "Invalid bot ID or registration token"})),
         ),
     }
-}
-
-#[derive(Deserialize, ToSchema)]
-struct AckConfigRequest {
-    config_id: Uuid,
 }
 
 #[utoipa::path(
@@ -949,39 +792,5 @@ async fn record_heartbeat(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": "Failed to record heartbeat"})),
         ),
-    }
-}
-
-#[derive(Serialize, ToSchema)]
-struct BotResponse {
-    id: Uuid,
-    account_id: Uuid,
-    name: String,
-    persona: String,
-    status: String,
-    droplet_id: Option<i64>,
-    desired_config_version_id: Option<Uuid>,
-    applied_config_version_id: Option<Uuid>,
-    created_at: chrono::DateTime<chrono::Utc>,
-    updated_at: chrono::DateTime<chrono::Utc>,
-    #[schema(format = "date-time")]
-    last_heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-impl From<Bot> for BotResponse {
-    fn from(bot: Bot) -> Self {
-        Self {
-            id: bot.id,
-            account_id: bot.account_id,
-            name: bot.name,
-            persona: bot.persona.to_string(),
-            status: bot.status.to_string(),
-            droplet_id: bot.droplet_id,
-            desired_config_version_id: bot.desired_config_version_id,
-            applied_config_version_id: bot.applied_config_version_id,
-            created_at: bot.created_at,
-            updated_at: bot.updated_at,
-            last_heartbeat_at: bot.last_heartbeat_at,
-        }
     }
 }
