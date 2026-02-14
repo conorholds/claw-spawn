@@ -62,13 +62,6 @@ where
     }
 }
 
-fn should_rollback_create_failure(err: &ProvisioningError) -> bool {
-    !matches!(
-        err,
-        ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited)
-    )
-}
-
 /// MED-005: Sanitize user-provided bot name to prevent injection/truncation issues
 /// - Removes/replaces special characters
 /// - Limits length to prevent truncation issues
@@ -734,15 +727,6 @@ mod tests {
         assert_eq!(escaped, "'abc'\"'\"'def'");
     }
 
-    #[test]
-    fn f002_should_rollback_create_failure_only_for_fatal_errors() {
-        assert!(should_rollback_create_failure(&ProvisioningError::Repository(
-            RepositoryError::InvalidData("db".to_string())
-        )));
-        assert!(!should_rollback_create_failure(
-            &ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited)
-        ));
-    }
 }
 
 impl<A, B, C, D> ProvisioningService<A, B, C, D>
@@ -852,11 +836,7 @@ where
         // we need to decrement the counter we just incremented
         let result = self.create_bot_internal(&mut bot, config).await;
 
-        if let Err(ref err) = result {
-            if !should_rollback_create_failure(err) {
-                return result.map(|_| bot);
-            }
-
+        if result.is_err() {
             if let Err(e) = self.bot_repo.hard_delete(bot.id).await {
                 if !matches!(e, RepositoryError::NotFound(_)) {
                     error!(
