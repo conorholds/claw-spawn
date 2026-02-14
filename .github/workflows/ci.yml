@@ -27,3 +27,12 @@ jobs:
 
       - name: Test
         run: cargo test
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint bootstrap script
+        run: shellcheck scripts/openclaw-bootstrap.sh
+
+      - name: Build Docker image
+        run: docker build -t claw-spawn-ci:latest .

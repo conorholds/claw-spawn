@@ -95,13 +95,17 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - Removed default host publication of PostgreSQL (`5432`) and documented explicit localhost-only opt-in mapping in `README.md`.
     - Verified with `docker compose config` (pass).
 
-- [ ] **F-008 CI missing Docker/bootstrap checks**
+- [x] **F-008 CI missing Docker/bootstrap checks**
   - Files touched: `.github/workflows/ci.yml`, `AUDIT_TODO.md`
   - Planned fix:
     - Add Docker image build step.
     - Add bootstrap script lint via `shellcheck`.
   - Test plan:
     - Validate workflow YAML locally (syntax review) and run `cargo test`.
+  - Completion note:
+    - Added CI steps to install `shellcheck`, lint `scripts/openclaw-bootstrap.sh`, and build the Docker image.
+    - Existing Rust fmt/clippy/test checks are unchanged.
+    - Verified by local workflow syntax parse (`ruby -e \"require 'yaml'; YAML.load_file(...)\"`) (pass).
 
 - [ ] **F-009 Dead migration objects (unused sequence/function)**
   - Files touched: `migrations/008_remove_unused_config_version_objects.sql`, `AUDIT_TODO.md`
