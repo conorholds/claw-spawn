@@ -107,7 +107,7 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - Existing Rust fmt/clippy/test checks are unchanged.
     - Verified by local workflow syntax parse (`ruby -e \"require 'yaml'; YAML.load_file(...)\"`) (pass).
 
-- [ ] **F-009 Dead migration objects (unused sequence/function)**
+- [x] **F-009 Dead migration objects (unused sequence/function)**
   - Files touched: `migrations/008_remove_unused_config_version_objects.sql`, `AUDIT_TODO.md`
   - Planned fix:
     - Add forward migration removing obsolete objects from migration 004.
@@ -115,6 +115,10 @@ Priority order: Critical/High correctness & security -> performance/reliability 
   - Test plan:
     - Run `cargo test`.
     - Confirm migration SQL syntax.
+  - Completion note:
+    - Added forward migration `008_remove_unused_config_version_objects.sql` dropping unused `get_next_config_version(UUID)` and `bot_config_version_seq`.
+    - Left `get_next_config_version_atomic(UUID)` intact as the active code path.
+    - Verified with `cargo test` (pass).
 
 - [ ] **F-010 DigitalOcean client retry logic duplication**
   - Files touched: `src/infrastructure/digital_ocean.rs`, `AUDIT_TODO.md`
