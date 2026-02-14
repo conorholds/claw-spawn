@@ -83,13 +83,17 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - Existing create-if-missing behavior was preserved while removing interactive-password dependency.
     - Verified with `make -n db` (rendered commands include `PGPASSWORD`) and `cargo test` (pass).
 
-- [ ] **F-007 Insecure docker-compose defaults (password + exposed DB port)**
+- [x] **F-007 Insecure docker-compose defaults (password + exposed DB port)**
   - Files touched: `docker-compose.yml`, `README.md`, `AUDIT_TODO.md`
   - Planned fix:
     - Remove hardcoded default DB password from compose source.
     - Restrict DB host exposure by default and document opt-in local mapping.
   - Test plan:
     - Run `docker compose config`.
+  - Completion note:
+    - Replaced hardcoded DB password with required `POSTGRES_PASSWORD` env interpolation for both postgres and app connection URL.
+    - Removed default host publication of PostgreSQL (`5432`) and documented explicit localhost-only opt-in mapping in `README.md`.
+    - Verified with `docker compose config` (pass).
 
 - [ ] **F-008 CI missing Docker/bootstrap checks**
   - Files touched: `.github/workflows/ci.yml`, `AUDIT_TODO.md`

@@ -84,6 +84,9 @@ cargo build --release --bin claw-spawn-server
 ## 🐳 Docker Quick Start
 
 ```bash
+# Required for docker-compose.yml (no insecure default is baked in)
+export POSTGRES_PASSWORD="$(openssl rand -base64 24)"
+
 # Start with Docker Compose (includes PostgreSQL)
 make docker-run
 
@@ -95,6 +98,14 @@ The Docker setup includes:
 - PostgreSQL database (auto-created)
 - Automatic migrations on startup
 - Server exposed on port 8080
+- PostgreSQL is **not** published to the host by default (service-only network access)
+
+If you need host DB access for local tooling, add this to the `postgres` service in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "127.0.0.1:5432:5432"
+```
 
 ## 📦 Environment Variables
 
