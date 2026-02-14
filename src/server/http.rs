@@ -1,7 +1,9 @@
 use super::state::AppState;
 use super::{
     http_auth::{extract_bearer_token, is_admin_authorized},
-    http_errors::{map_account_read_error, map_bot_action_error, map_bot_read_error},
+    http_errors::{
+        map_account_read_error, map_bot_action_error, map_bot_read_error, map_create_bot_error,
+    },
     http_parse::{
         parse_algorithm, parse_asset_focus, parse_persona, parse_strictness, parse_subscription_tier,
     },
@@ -14,7 +16,7 @@ use crate::application::ProvisioningError;
 use crate::domain::{
     Account, BotConfig, BotSecrets, Persona, RiskConfig, SignalKnobs, StrictnessLevel, TradingConfig,
 };
-use crate::infrastructure::{AccountRepository, DigitalOceanError};
+use crate::infrastructure::AccountRepository;
 use axum::{
     extract::{Path, Query, State},
     http::{header::HeaderMap, StatusCode},
@@ -114,7 +116,9 @@ mod tests {
         assert_eq!(status_not_found, StatusCode::NOT_FOUND);
 
         let (status_rate_limited, _) =
-            map_bot_action_error(&ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited));
+            map_bot_action_error(&ProvisioningError::DigitalOcean(
+                crate::infrastructure::DigitalOceanError::RateLimited,
+            ));
         assert_eq!(status_rate_limited, StatusCode::TOO_MANY_REQUESTS);
     }
 
@@ -126,6 +130,25 @@ mod tests {
         assert_eq!(status_not_found, StatusCode::NOT_FOUND);
 
         let (status_internal, _) = map_bot_read_error(&crate::application::LifecycleError::Repository(
+            crate::infrastructure::RepositoryError::InvalidData("bad".to_string()),
+        ));
+        assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn map_create_bot_error_maps_expected_status_codes() {
+        let (status_not_found, _) = map_create_bot_error(&ProvisioningError::Repository(
+            crate::infrastructure::RepositoryError::NotFound("missing".to_string()),
+        ));
+        assert_eq!(status_not_found, StatusCode::NOT_FOUND);
+
+        let (status_rate_limited, _) =
+            map_create_bot_error(&ProvisioningError::DigitalOcean(
+                crate::infrastructure::DigitalOceanError::RateLimited,
+            ));
+        assert_eq!(status_rate_limited, StatusCode::TOO_MANY_REQUESTS);
+
+        let (status_internal, _) = map_create_bot_error(&ProvisioningError::Repository(
             crate::infrastructure::RepositoryError::InvalidData("bad".to_string()),
         ));
         assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
@@ -484,22 +507,10 @@ async fn create_bot(
             StatusCode::CREATED,
             Json(serde_json::json!(BotResponse::from(bot))),
         ),
-        Err(ProvisioningError::AccountLimitReached(max)) => (
-            StatusCode::FORBIDDEN,
-            Json(serde_json::json!({
-                "error": format!("Account limit reached: maximum {} bots allowed", max)
-            })),
-        ),
-        Err(ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited)) => (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(serde_json::json!({"error": "Rate limited by DigitalOcean, please retry"})),
-        ),
         Err(e) => {
             error!(error = %e, "Failed to create bot");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Failed to create bot"})),
-            )
+            let (status, body) = map_create_bot_error(&e);
+            (status, Json(body))
         }
     }
 }

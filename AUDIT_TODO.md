@@ -18,7 +18,7 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - Create failures now consistently trigger compensating cleanup (`hard_delete` + `decrement_bot_counter`), preventing quota/state leaks.
     - Verified with `cargo test` (pass).
 
-- [ ] **F-002 Incorrect 500 for missing account on `POST /bots`**
+- [x] **F-002 Incorrect 500 for missing account on `POST /bots`**
   - Files touched: `src/server/http.rs`, `src/server/http_errors.rs`, `src/server/http.rs` (tests), `AUDIT_TODO.md`
   - Planned fix:
     - Map `RepositoryError::NotFound` from create-bot path to `404`.
@@ -26,6 +26,10 @@ Priority order: Critical/High correctness & security -> performance/reliability 
   - Test plan:
     - Add/update HTTP error mapping test.
     - Run `cargo test`.
+  - Completion note:
+    - Added `map_create_bot_error(...)` and wired `create_bot` handler to use structured error mapping.
+    - `ProvisioningError::Repository(RepositoryError::NotFound(_))` now returns `404 Account not found`.
+    - Verified with `cargo test` (pass).
 
 - [ ] **F-003 Incorrect 500 mapping on `GET /bots/{id}/config` for not-found**
   - Files touched: `src/server/http.rs`, `src/server/http_errors.rs`, `src/server/http.rs` (tests), `AUDIT_TODO.md`

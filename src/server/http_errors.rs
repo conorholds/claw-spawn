@@ -25,6 +25,29 @@ pub(super) fn map_bot_action_error(err: &ProvisioningError) -> (StatusCode, serd
     }
 }
 
+pub(super) fn map_create_bot_error(err: &ProvisioningError) -> (StatusCode, serde_json::Value) {
+    match err {
+        ProvisioningError::Repository(RepositoryError::NotFound(_)) => (
+            StatusCode::NOT_FOUND,
+            serde_json::json!({ "error": "Account not found" }),
+        ),
+        ProvisioningError::AccountLimitReached(max) => (
+            StatusCode::FORBIDDEN,
+            serde_json::json!({
+                "error": format!("Account limit reached: maximum {} bots allowed", max)
+            }),
+        ),
+        ProvisioningError::DigitalOcean(DigitalOceanError::RateLimited) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            serde_json::json!({ "error": "Rate limited by DigitalOcean, please retry" }),
+        ),
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            serde_json::json!({ "error": "Failed to create bot" }),
+        ),
+    }
+}
+
 pub(super) fn map_bot_read_error(err: &LifecycleError) -> (StatusCode, serde_json::Value) {
     match err {
         LifecycleError::Repository(RepositoryError::NotFound(_)) => {
