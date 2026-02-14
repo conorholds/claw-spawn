@@ -2,8 +2,8 @@ use super::state::AppState;
 use super::{
     http_auth::{extract_bearer_token, is_admin_authorized},
     http_errors::{
-        map_account_read_error, map_bot_action_error, map_bot_config_error, map_bot_read_error,
-        map_create_bot_error,
+        map_account_read_error, map_ack_config_error, map_bot_action_error, map_bot_config_error,
+        map_bot_read_error, map_create_bot_error,
     },
     http_parse::{
         parse_algorithm, parse_asset_focus, parse_persona, parse_strictness, parse_subscription_tier,
@@ -180,6 +180,28 @@ mod tests {
             map_bot_config_error(&crate::application::LifecycleError::Repository(
                 crate::infrastructure::RepositoryError::InvalidData("bad".to_string()),
             ));
+        assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn map_ack_config_error_maps_expected_status_codes() {
+        let (status_not_found, _) =
+            map_ack_config_error(&crate::application::LifecycleError::ConfigNotFound(Uuid::nil()));
+        assert_eq!(status_not_found, StatusCode::NOT_FOUND);
+
+        let (status_conflict, _) = map_ack_config_error(
+            &crate::application::LifecycleError::ConfigVersionConflict {
+                acknowledged: Uuid::nil(),
+                desired: Some(Uuid::new_v4()),
+            },
+        );
+        assert_eq!(status_conflict, StatusCode::CONFLICT);
+
+        let (status_internal, _) = map_ack_config_error(
+            &crate::application::LifecycleError::Repository(
+                crate::infrastructure::RepositoryError::InvalidData("bad".to_string()),
+            ),
+        );
         assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
@@ -742,7 +764,10 @@ async fn get_desired_config(
     responses(
         (status = 200, description = "Config acknowledged", body = Object),
         (status = 401, description = "Invalid or missing authorization token", body = Object),
-        (status = 400, description = "Failed to acknowledge config", body = Object)
+        (status = 400, description = "Invalid bot state for acknowledgment", body = Object),
+        (status = 404, description = "Config not found", body = Object),
+        (status = 409, description = "Config version conflict", body = Object),
+        (status = 500, description = "Failed to acknowledge config", body = Object)
     )
 )]
 async fn acknowledge_config(
@@ -773,10 +798,10 @@ async fn acknowledge_config(
             StatusCode::OK,
             Json(serde_json::json!({"status": "acknowledged"})),
         ),
-        Err(_) => (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": "Failed to acknowledge config"})),
-        ),
+        Err(e) => {
+            let (status, body) = map_ack_config_error(&e);
+            (status, Json(body))
+        }
     }
 }
 

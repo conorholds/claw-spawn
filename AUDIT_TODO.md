@@ -44,7 +44,7 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - Missing bot/config no longer falls through as internal server error.
     - Verified with `cargo test` (pass).
 
-- [ ] **F-004 `config_ack` collapses all failures to 400**
+- [x] **F-004 `config_ack` collapses all failures to 400**
   - Files touched: `src/server/http.rs`, `src/server/http_errors.rs`, `src/server/http.rs` (tests), `AUDIT_TODO.md`
   - Planned fix:
     - Return `404` for missing bot/config and `409` for config version conflict.
@@ -52,6 +52,10 @@ Priority order: Critical/High correctness & security -> performance/reliability 
   - Test plan:
     - Add mapping tests for not-found/conflict/internal paths.
     - Run `cargo test`.
+  - Completion note:
+    - Added `map_ack_config_error(...)` and routed `acknowledge_config` handler through explicit status mapping.
+    - `config_ack` now returns `404` (missing config), `409` (version conflict), `400` (invalid state), and `500` (unexpected).
+    - Updated OpenAPI response annotations and verified with `cargo test` (pass).
 
 - [ ] **F-005 Silent no-op droplet updates**
   - Files touched: `src/infrastructure/postgres_droplet_repo.rs`, `AUDIT_TODO.md`

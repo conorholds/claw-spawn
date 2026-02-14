@@ -73,6 +73,27 @@ pub(super) fn map_bot_config_error(err: &LifecycleError) -> (StatusCode, serde_j
     }
 }
 
+pub(super) fn map_ack_config_error(err: &LifecycleError) -> (StatusCode, serde_json::Value) {
+    match err {
+        LifecycleError::Repository(RepositoryError::NotFound(_)) | LifecycleError::ConfigNotFound(_) => (
+            StatusCode::NOT_FOUND,
+            serde_json::json!({ "error": "Config not found" }),
+        ),
+        LifecycleError::ConfigVersionConflict { .. } => (
+            StatusCode::CONFLICT,
+            serde_json::json!({ "error": "Config version conflict" }),
+        ),
+        LifecycleError::InvalidState(_) => (
+            StatusCode::BAD_REQUEST,
+            serde_json::json!({ "error": "Invalid bot state for config acknowledgment" }),
+        ),
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            serde_json::json!({ "error": "Failed to acknowledge config" }),
+        ),
+    }
+}
+
 pub(super) fn map_account_read_error(err: &RepositoryError) -> (StatusCode, serde_json::Value) {
     match err {
         RepositoryError::NotFound(_) => {
