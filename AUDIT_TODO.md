@@ -120,10 +120,14 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - Left `get_next_config_version_atomic(UUID)` intact as the active code path.
     - Verified with `cargo test` (pass).
 
-- [ ] **F-010 DigitalOcean client retry logic duplication**
+- [x] **F-010 DigitalOcean client retry logic duplication**
   - Files touched: `src/infrastructure/digital_ocean.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Introduce shared retry/request helper to remove duplication.
     - Preserve endpoint behavior and error mapping.
   - Test plan:
     - Run `cargo test` and `cargo clippy -- -D warnings`.
+  - Completion note:
+    - Added shared `send_with_retry(...)` helper in `DigitalOceanClient` and refactored droplet create/get/destroy/shutdown/reboot paths to use it.
+    - Preserved method-specific response semantics while removing duplicated retry loops.
+    - Verified with `cargo test` and `cargo clippy -- -D warnings` (pass).
