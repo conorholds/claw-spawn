@@ -31,7 +31,7 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - `ProvisioningError::Repository(RepositoryError::NotFound(_))` now returns `404 Account not found`.
     - Verified with `cargo test` (pass).
 
-- [ ] **F-003 Incorrect 500 mapping on `GET /bots/{id}/config` for not-found**
+- [x] **F-003 Incorrect 500 mapping on `GET /bots/{id}/config` for not-found**
   - Files touched: `src/server/http.rs`, `src/server/http_errors.rs`, `src/server/http.rs` (tests), `AUDIT_TODO.md`
   - Planned fix:
     - Distinguish not-found lifecycle/repository errors and return `404`.
@@ -39,6 +39,10 @@ Priority order: Critical/High correctness & security -> performance/reliability 
   - Test plan:
     - Add/update mapping test(s).
     - Run `cargo test`.
+  - Completion note:
+    - Added `map_bot_config_error(...)` and wired `get_bot_config` handler to map lifecycle not-found errors to `404`.
+    - Missing bot/config no longer falls through as internal server error.
+    - Verified with `cargo test` (pass).
 
 - [ ] **F-004 `config_ack` collapses all failures to 400**
   - Files touched: `src/server/http.rs`, `src/server/http_errors.rs`, `src/server/http.rs` (tests), `AUDIT_TODO.md`

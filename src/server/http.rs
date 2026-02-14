@@ -2,7 +2,8 @@ use super::state::AppState;
 use super::{
     http_auth::{extract_bearer_token, is_admin_authorized},
     http_errors::{
-        map_account_read_error, map_bot_action_error, map_bot_read_error, map_create_bot_error,
+        map_account_read_error, map_bot_action_error, map_bot_config_error, map_bot_read_error,
+        map_create_bot_error,
     },
     http_parse::{
         parse_algorithm, parse_asset_focus, parse_persona, parse_strictness, parse_subscription_tier,
@@ -164,6 +165,21 @@ mod tests {
         let (status_internal, _) = map_account_read_error(
             &crate::infrastructure::RepositoryError::InvalidData("bad".to_string()),
         );
+        assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn map_bot_config_error_maps_expected_status_codes() {
+        let (status_not_found, _) =
+            map_bot_config_error(&crate::application::LifecycleError::Repository(
+                crate::infrastructure::RepositoryError::NotFound("missing".to_string()),
+            ));
+        assert_eq!(status_not_found, StatusCode::NOT_FOUND);
+
+        let (status_internal, _) =
+            map_bot_config_error(&crate::application::LifecycleError::Repository(
+                crate::infrastructure::RepositoryError::InvalidData("bad".to_string()),
+            ));
         assert_eq!(status_internal, StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
@@ -578,10 +594,10 @@ async fn get_bot_config(
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"error": "No config found"})),
         ),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "Failed to get config"})),
-        ),
+        Err(e) => {
+            let (status, body) = map_bot_config_error(&e);
+            (status, Json(body))
+        }
     }
 }
 
