@@ -70,7 +70,7 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - Missing droplet IDs now surface as `RepositoryError::NotFound(...)` instead of silently succeeding.
     - Verified with `cargo test` (pass).
 
-- [ ] **F-006 `make db` fails with password-protected Postgres**
+- [x] **F-006 `make db` fails with password-protected Postgres**
   - Files touched: `Makefile`, `AUDIT_TODO.md`
   - Planned fix:
     - Parse and export password (or use full URL) for `psql` calls.
@@ -78,6 +78,10 @@ Priority order: Critical/High correctness & security -> performance/reliability 
   - Test plan:
     - Run `make -n db` for command validation.
     - Run `cargo test` regression sanity.
+  - Completion note:
+    - Updated `db` target to parse `DB_PASSWORD` from `CLAW_DATABASE_URL` and pass it to `psql` via `PGPASSWORD`.
+    - Existing create-if-missing behavior was preserved while removing interactive-password dependency.
+    - Verified with `make -n db` (rendered commands include `PGPASSWORD`) and `cargo test` (pass).
 
 - [ ] **F-007 Insecure docker-compose defaults (password + exposed DB port)**
   - Files touched: `docker-compose.yml`, `README.md`, `AUDIT_TODO.md`

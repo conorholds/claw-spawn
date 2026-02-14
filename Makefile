@@ -79,8 +79,9 @@ db:
 	@DB_NAME=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p'); \
 	DB_HOST=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p'); \
 	DB_USER=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p'); \
-	psql -h $$DB_HOST -U $$DB_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '$$DB_NAME'" | grep -q 1 || \
-		psql -h $$DB_HOST -U $$DB_USER -d postgres -c "CREATE DATABASE $$DB_NAME;" && \
+	DB_PASSWORD=$$(echo "$$CLAW_DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p'); \
+	PGPASSWORD="$$DB_PASSWORD" psql -h $$DB_HOST -U $$DB_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '$$DB_NAME'" | grep -q 1 || \
+		PGPASSWORD="$$DB_PASSWORD" psql -h $$DB_HOST -U $$DB_USER -d postgres -c "CREATE DATABASE $$DB_NAME;" && \
 		echo "✅ Database created: $$DB_NAME" || \
 		echo "✅ Database already exists: $$DB_NAME"
 
