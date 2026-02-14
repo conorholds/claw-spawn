@@ -57,7 +57,7 @@ Priority order: Critical/High correctness & security -> performance/reliability 
     - `config_ack` now returns `404` (missing config), `409` (version conflict), `400` (invalid state), and `500` (unexpected).
     - Updated OpenAPI response annotations and verified with `cargo test` (pass).
 
-- [ ] **F-005 Silent no-op droplet updates**
+- [x] **F-005 Silent no-op droplet updates**
   - Files touched: `src/infrastructure/postgres_droplet_repo.rs`, `AUDIT_TODO.md`
   - Planned fix:
     - Validate `rows_affected()` for single-row droplet updates.
@@ -65,6 +65,10 @@ Priority order: Critical/High correctness & security -> performance/reliability 
   - Test plan:
     - Run `cargo test`.
     - Verify compile-time and behavioral consistency.
+  - Completion note:
+    - Added `ensure_single_row_affected(...)` to droplet repo and applied it to all single-row `UPDATE` operations.
+    - Missing droplet IDs now surface as `RepositoryError::NotFound(...)` instead of silently succeeding.
+    - Verified with `cargo test` (pass).
 
 - [ ] **F-006 `make db` fails with password-protected Postgres**
   - Files touched: `Makefile`, `AUDIT_TODO.md`

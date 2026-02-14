@@ -1,7 +1,7 @@
 use crate::domain::{Droplet, DropletStatus};
 use crate::infrastructure::{DropletRepository, RepositoryError};
 use async_trait::async_trait;
-use sqlx::{PgPool, Row};
+use sqlx::{postgres::PgQueryResult, PgPool, Row};
 use uuid::Uuid;
 
 pub struct PostgresDropletRepository {
@@ -12,6 +12,17 @@ impl PostgresDropletRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+fn ensure_single_row_affected(
+    result: PgQueryResult,
+    resource: &str,
+    id: impl std::fmt::Display,
+) -> Result<(), RepositoryError> {
+    if result.rows_affected() == 0 {
+        return Err(RepositoryError::NotFound(format!("{resource} {id}")));
+    }
+    Ok(())
 }
 
 #[async_trait]
@@ -65,7 +76,7 @@ impl DropletRepository for PostgresDropletRepository {
         droplet_id: i64,
         bot_id: Option<Uuid>,
     ) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE droplets
             SET bot_id = $1
@@ -77,11 +88,12 @@ impl DropletRepository for PostgresDropletRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Droplet", droplet_id)?;
         Ok(())
     }
 
     async fn update_status(&self, droplet_id: i64, status: &str) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE droplets
             SET status = $1
@@ -93,11 +105,12 @@ impl DropletRepository for PostgresDropletRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Droplet", droplet_id)?;
         Ok(())
     }
 
     async fn update_ip(&self, droplet_id: i64, ip: Option<String>) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE droplets
             SET ip_address = $1
@@ -109,11 +122,12 @@ impl DropletRepository for PostgresDropletRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Droplet", droplet_id)?;
         Ok(())
     }
 
     async fn mark_destroyed(&self, droplet_id: i64) -> Result<(), RepositoryError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE droplets
             SET status = 'destroyed', destroyed_at = $1
@@ -125,6 +139,7 @@ impl DropletRepository for PostgresDropletRepository {
         .execute(&self.pool)
         .await?;
 
+        ensure_single_row_affected(result, "Droplet", droplet_id)?;
         Ok(())
     }
 }
